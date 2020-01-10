@@ -1,0 +1,6 @@
+*.pyc
+.DS_Store
+__pycache__
+econ-review.docx
+.ipynb_checkpoints
+reviews/
