@@ -10,3 +10,7 @@ A review of incentives in eth2, with models and simulations.
 
 Ongoing effort to produce an incentives-focused testing environment for the beacon chain.
 - [Beacon Runner notebook introduction](eth2economics/code/beaconrunner/beacon_runner.ipynb)
+
+#### Also
+
+- [Exploring perfect world rewards](eth2economics/code/beaconrunner/perfect_world.ipynb)
