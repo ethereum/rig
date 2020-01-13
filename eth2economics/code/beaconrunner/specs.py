@@ -73,7 +73,7 @@ class DepositMessage(Container):
     pubkey: BLSPubkey
     withdrawal_credentials: Bytes32
     amount: Gwei
-        
+
 class DepositData(Container):
     pubkey: BLSPubkey
     withdrawal_credentials: Bytes32
@@ -89,7 +89,7 @@ class BeaconBlockHeader(Container):
 class SignedBeaconBlockHeader(Container):
     message: BeaconBlockHeader
     signature: BLSSignature
-        
+
 class ProposerSlashing(Container):
     proposer_index: ValidatorIndex
     signed_header_1: SignedBeaconBlockHeader
@@ -115,7 +115,7 @@ class VoluntaryExit(Container):
 class SignedVoluntaryExit(Container):
     message: VoluntaryExit
     signature: BLSSignature
-        
+
 class BeaconBlockBody(Container):
     randao_reveal: BLSSignature
     eth1_data: Eth1Data  # Eth1 data vote
@@ -166,7 +166,7 @@ class BeaconState(Container):
 class SignedBeaconBlock(Container):
     message: BeaconBlock
     signature: BLSSignature
-        
+
 def integer_squareroot(n: uint64) -> uint64:
     """
     Return the largest integer ``x`` such that ``x**2 <= n``.
