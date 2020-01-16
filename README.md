@@ -14,3 +14,11 @@ Ongoing effort to produce an incentives-focused testing environment for the beac
 #### Also
 
 - [Exploring perfect world rewards](eth2economics/code/beaconrunner/perfect_world.ipynb)
+
+## Talks
+
+Meet the RIG and check our previous talks!
+
+| Talk | Location | Date | Link |
+|---|---|---|---|
+| OpenSUTD Blockchain development IAP | SUTD | 16 January 2020 | [Slides](https://docs.google.com/presentation/d/10LR57HTiSs-8pBpNeXKoJ13zOPxzOrLI8Avs3FSDsz0/edit?usp=sharing) |
