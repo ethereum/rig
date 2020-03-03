@@ -21,4 +21,5 @@ Meet the RIG and check our previous talks!
 
 | Talk | Location | Date | Link |
 |---|---|---|---|
+| EthCC[3] | Paris (remote from Singapore) | 3 March 2020 | [Slides](assets/pdf/rig-ethcc.pdf) |
 | OpenSUTD Blockchain development IAP | SUTD | 16 January 2020 | [Slides](https://docs.google.com/presentation/d/10LR57HTiSs-8pBpNeXKoJ13zOPxzOrLI8Avs3FSDsz0/edit?usp=sharing) |
