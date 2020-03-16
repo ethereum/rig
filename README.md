@@ -13,7 +13,7 @@ Ongoing effort to produce an incentives-focused testing environment for the beac
 
 #### Also
 
-- [Exploring perfect world rewards](eth2economics/code/beaconrunner/perfect_world.ipynb)
+- [Exploring perfect world rewards](eth2economics/code/minisims/perfect_world.ipynb)
 
 ## Talks
 
