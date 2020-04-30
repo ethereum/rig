@@ -1,14 +1,13 @@
 import secrets
 import specs
 import network as nt
+import time
 
 from eth2spec.utils.ssz.ssz_impl import hash_tree_root
 from eth2spec.utils.ssz.ssz_typing import Bitlist
 from eth2spec.utils.hash_function import hash
 from eth2 import eth_to_gwei
-    
-print(specs.SLOTS_PER_EPOCH)    
-    
+        
 def get_initial_deposits(n):
     return [specs.Deposit(
         data=specs.DepositData(
@@ -38,18 +37,23 @@ def process_genesis_block(genesis_state):
 ## State transitions
 
 def disseminate_attestations(params, step, sL, s, _input):
+    start = time.time()
+    
     network = s["network"]
     for info_set_index, attestations in enumerate(_input["attestations"]):
         for attestation in attestations:
             nt.disseminate_attestation(network, attestation[0], attestation[1], to_sets = [info_set_index])
 
-    print("--------------")
     print("adding", sum([len(atts) for atts in _input["attestations"]]), "to network items", "there are now", len(network.attestations), "attestations")
     print("network state", [[d.item.data.slot, [i for i in d.info_sets]] for d in network.attestations])
 
+    print("disseminate_attestations time = ", time.time() - start)
+    
     return ('network', network)
 
 def disseminate_blocks(params, step, sL, s, _input):    
+    start = time.time()
+    
     network = s["network"]
     for info_set_index, blocks in enumerate(_input["blocks"]):
         state = network.sets[info_set_index].beacon_state
@@ -64,6 +68,8 @@ def disseminate_blocks(params, step, sL, s, _input):
     network.attestations = [item for item_index, item in enumerate(network.attestations) if item_index not in _input["attestation_indices"]]
 
     print("removing", len(_input["attestation_indices"]), "from network items, there are now", len(network.attestations), "items")
+    
+    print("disseminate_blocks time = ", time.time() - start)
 
     return ('network', network)
 
@@ -188,6 +194,8 @@ def aggregate_attestations(state, attestations):
     ) for att_hash in hashes]
 
 def attest_policy(params, step, sL, s):
+    start = time.time()
+    
     network = s['network']
     produced_attestations = [[] for i in range(0, len(network.sets))]
 
@@ -219,6 +227,9 @@ def attest_policy(params, step, sL, s):
                 attestation = honest_attest(state, validator_index)
                 produced_attestations[info_set_index].append([validator_index, attestation])
 
+    print("--------------")
+    print("attest_policy time = ", time.time() - start)            
+                
     return ({ 'attestations': produced_attestations })
 
 ### Block proposal
@@ -242,6 +253,8 @@ def honest_block_proposal(state, attestations, validator_index):
     return signed_beacon_block
 
 def propose_policy(params, step, sL, s):
+    start = time.time()
+    
     network = s['network']
     produced_blocks = [[] for i in range(0, len(network.sets))]
     attestation_indices = []
@@ -277,6 +290,8 @@ def propose_policy(params, step, sL, s):
             block = honest_block_proposal(state, attestations, validator_index)
             produced_blocks[info_set_index].append(block)
 
+    print("propose_policy time = ", time.time() - start)        
+            
     return ({
         'blocks': produced_blocks,
         'attestation_indices': attestation_indices

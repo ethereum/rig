@@ -11,6 +11,7 @@ A review of incentives in eth2, with models and simulations.
 Ongoing effort to produce an incentives-focused testing environment for the beacon chain.
 
 - [Beacon Runner notebook introduction [Notebook]](eth2economics/code/beaconrunner/beacon_runner.ipynb)
+- [Beacon Runner 2049: Network partitions [Notebook]](eth2economics/code/beaconrunner2049/beacon_runner_2049.ipynb)
 
 #### Also
 
