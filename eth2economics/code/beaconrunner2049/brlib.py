@@ -7,7 +7,9 @@ from eth2spec.utils.ssz.ssz_impl import hash_tree_root
 from eth2spec.utils.ssz.ssz_typing import Bitlist
 from eth2spec.utils.hash_function import hash
 from eth2 import eth_to_gwei
-        
+
+log = True
+
 def get_initial_deposits(n):
     return [specs.Deposit(
         data=specs.DepositData(
@@ -44,10 +46,10 @@ def disseminate_attestations(params, step, sL, s, _input):
         for attestation in attestations:
             nt.disseminate_attestation(network, attestation[0], attestation[1], to_sets = [info_set_index])
 
-    print("adding", sum([len(atts) for atts in _input["attestations"]]), "to network items", "there are now", len(network.attestations), "attestations")
-    print("network state", [[d.item.data.slot, [i for i in d.info_sets]] for d in network.attestations])
+    if log: print("adding", sum([len(atts) for atts in _input["attestations"]]), "to network items", "there are now", len(network.attestations), "attestations")
+    if log: print("network state", [[d.item.data.slot, [i for i in d.info_sets]] for d in network.attestations])
 
-    print("disseminate_attestations time = ", time.time() - start)
+    if log: print("disseminate_attestations time = ", time.time() - start)
     
     return ('network', network)
 
@@ -67,9 +69,9 @@ def disseminate_blocks(params, step, sL, s, _input):
 
     network.attestations = [item for item_index, item in enumerate(network.attestations) if item_index not in _input["attestation_indices"]]
 
-    print("removing", len(_input["attestation_indices"]), "from network items, there are now", len(network.attestations), "items")
+    if log: print("removing", len(_input["attestation_indices"]), "from network items, there are now", len(network.attestations), "items")
     
-    print("disseminate_blocks time = ", time.time() - start)
+    if log: print("disseminate_blocks time = ", time.time() - start)
 
     return ('network', network)
 
@@ -151,7 +153,7 @@ def honest_attest(state, validator_index):
         target = tgt_checkpoint
     )
 
-#     print("attestation for source", src_checkpoint.epoch, "and target", tgt_checkpoint.epoch)
+#     if log: print("attestation for source", src_checkpoint.epoch, "and target", tgt_checkpoint.epoch)
 
     # For now we disregard aggregation of attestations.
     # Some validators are chosen as aggregators: they take a bunch of identical attestations
@@ -187,10 +189,10 @@ def build_aggregate(state, attestations):
 def aggregate_attestations(state, attestations):
     # Take in a set of attestations
     # Output aggregated attestations
-    hashes = [hash_tree_root(att) for att in attestations]
+    hashes = set([hash_tree_root(att.data) for att in attestations])
     return [build_aggregate(
         state,
-        [att for att in attestations if att_hash == hash_tree_root(att)]
+        [att for att in attestations if att_hash == hash_tree_root(att.data)]
     ) for att_hash in hashes]
 
 def attest_policy(params, step, sL, s):
@@ -227,8 +229,8 @@ def attest_policy(params, step, sL, s):
                 attestation = honest_attest(state, validator_index)
                 produced_attestations[info_set_index].append([validator_index, attestation])
 
-    print("--------------")
-    print("attest_policy time = ", time.time() - start)            
+    if log: print("--------------")
+    if log: print("attest_policy time = ", time.time() - start)            
                 
     return ({ 'attestations': produced_attestations })
 
@@ -248,8 +250,8 @@ def honest_block_proposal(state, attestations, validator_index):
     )
     signed_beacon_block = specs.SignedBeaconBlock(message=beacon_block)
 
-    print("honest validator", validator_index, "propose a block for slot", state.slot)
-    print("block contains", len(signed_beacon_block.message.body.attestations), "attestations")
+    if log: print("honest validator", validator_index, "propose a block for slot", state.slot)
+    if log: print("block contains", len(signed_beacon_block.message.body.attestations), "attestations")
     return signed_beacon_block
 
 def propose_policy(params, step, sL, s):
@@ -260,8 +262,10 @@ def propose_policy(params, step, sL, s):
     attestation_indices = []
 
     for info_set_index, info_set in enumerate(network.sets):
+        
+        if log: print("Looking at info set index =", info_set_index, "time =", time.time() - start)
         state = info_set.beacon_state
-
+        
         current_epoch = specs.get_current_epoch(state)
         previous_epoch = specs.get_previous_epoch(state)
 
@@ -274,23 +278,25 @@ def propose_policy(params, step, sL, s):
             validator_epoch = current_epoch
 
         active_validator_indices = specs.get_active_validator_indices(state, validator_epoch)
+        if log: print("Obtained active validator sets", time.time() - start)
+            
+        proposer_index = specs.get_beacon_proposer_index(state)
+        
+        if proposer_index not in info_set.validators:
+            continue
 
-        block_proposed = False
-        for validator_index in active_validator_indices:
-            if validator_index not in info_set.validators:
-                continue
+        proposer_knowledge = nt.knowledge_set(network, proposer_index)
+        attestations = [net_item[1].item for net_item in proposer_knowledge["attestations"]]
+        attestation_indices += [net_item[0] for net_item in proposer_knowledge["attestations"]]
+        if log: print("time before aggregation", time.time() - start)
+        attestations = aggregate_attestations(state, attestations)
+        if log: print("time after aggregation", time.time() - start)
+        block = honest_block_proposal(state, attestations, proposer_index)
+        if log: print("time after block proposal", time.time() - start)
+        produced_blocks[info_set_index].append(block)
+        if log: print("time after appending", time.time() - start)
 
-            if specs.get_beacon_proposer_index(state) != validator_index:
-                continue
-
-            proposer_knowledge = nt.knowledge_set(network, validator_index)
-            attestations = [net_item[1].item for net_item in proposer_knowledge["attestations"]]
-            attestation_indices += [net_item[0] for net_item in proposer_knowledge["attestations"]]
-            attestations = aggregate_attestations(state, attestations)
-            block = honest_block_proposal(state, attestations, validator_index)
-            produced_blocks[info_set_index].append(block)
-
-    print("propose_policy time = ", time.time() - start)        
+    if log: print("propose_policy time = ", time.time() - start)        
             
     return ({
         'blocks': produced_blocks,
@@ -299,7 +305,7 @@ def propose_policy(params, step, sL, s):
 
 def percent_attesting_previous_epoch(state):
     if specs.get_current_epoch(state) <= specs.GENESIS_EPOCH + 1:
-        print("not processing justification and finalization")
+        if log: print("not processing justification and finalization")
         return 0.0
 
     previous_epoch = specs.get_previous_epoch(state)
@@ -309,7 +315,7 @@ def percent_attesting_previous_epoch(state):
 
 def percent_attesting_current_epoch(state):
     if specs.get_current_epoch(state) <= specs.GENESIS_EPOCH + 1:
-        print("not processing justification and finalization")
+        if log: print("not processing justification and finalization")
         return 0.0
 
     current_epoch = specs.get_current_epoch(state)
