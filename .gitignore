@@ -5,7 +5,5 @@ econ-review.docx
 .ipynb_checkpoints
 reviews/
 visuals/
-Pipfile
-Pipfile.lock
 temp
 .Rproj.user

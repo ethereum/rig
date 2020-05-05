@@ -341,7 +341,6 @@ class SignedAggregateAndProof(Container):
     message: AggregateAndProof
     signature: BLSSignature
 
-
 def integer_squareroot(n: uint64) -> uint64:
     """
     Return the largest integer ``x`` such that ``x**2 <= n``.
@@ -704,6 +703,9 @@ def get_attesting_indices(state: BeaconState,
     Return the set of attesting indices corresponding to ``data`` and ``bits``.
     """
     committee = get_beacon_committee(state, data.slot, data.index)
+    if (len(bits) != len(committee)):
+        print(bits)
+        print(committee)
     return set(index for i, index in enumerate(committee) if bits[i])
 
 
@@ -945,6 +947,7 @@ def get_base_reward(state: BeaconState, index: ValidatorIndex) -> Gwei:
 
 
 def get_attestation_deltas(state: BeaconState) -> Tuple[Sequence[Gwei], Sequence[Gwei]]:
+    print("get att deltas")
     previous_epoch = get_previous_epoch(state)
     total_balance = get_total_active_balance(state)
     rewards = [Gwei(0) for _ in range(len(state.validators))]
@@ -982,7 +985,9 @@ def get_attestation_deltas(state: BeaconState) -> Tuple[Sequence[Gwei], Sequence
 
     # Inactivity penalty
     finality_delay = previous_epoch - state.finalized_checkpoint.epoch
+    print("finality delay", finality_delay)
     if finality_delay > MIN_EPOCHS_TO_INACTIVITY_PENALTY:
+        print("leaking penalty")
         matching_target_attesting_indices = get_unslashed_attesting_indices(state, matching_target_attestations)
         for index in eligible_validator_indices:
             penalties[index] += Gwei(BASE_REWARDS_PER_EPOCH * get_base_reward(state, index))
