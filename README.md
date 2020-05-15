@@ -12,6 +12,7 @@ Ongoing effort to produce an incentives-focused testing environment for the beac
 
 - [Beacon Runner notebook introduction [Notebook]](eth2economics/code/beaconrunner/beacon_runner.ipynb)
 - [Beacon Runner 2049: Network partitions [Notebook]](eth2economics/code/beaconrunner2049/beacon_runner_2049.ipynb)
+  - ["It's only wafer-thin" -- Preventing state explosion with observers [Notebook]](eth2economics/code/beaconrunner2049/observers/observed-br2049.ipynb)
 
 #### Also
 
@@ -22,6 +23,7 @@ Ongoing effort to produce an incentives-focused testing environment for the beac
 Simulations and analysis of transaction fee markets.
 
 - [Easing into 1559 [Notebook]](eip1559/eip1559.ipynb)
+  - [An ethresear.ch thread](https://ethresear.ch/t/eip-1559-simulations/7280)
 
 ## Talks
 

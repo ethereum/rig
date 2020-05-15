@@ -58,7 +58,7 @@ def ask_to_check_backlog(network: Network,
         # Check if there are pending attestations/blocks that can be recorded
         known_items = knowledge_set(network, validator_index)
         validator.check_backlog(known_items)
-    if log: print("done all the backlog", time.time() - start, "\n-------- end ask_to_check_backlog", time.time() - start)
+    if log: print("-------- end ask_to_check_backlog", time.time() - start)
         
 def disseminate_block(network: Network,
                       sender: ValidatorIndex,
@@ -66,6 +66,8 @@ def disseminate_block(network: Network,
                       to_sets: List[NetworkSetIndex, VALIDATOR_REGISTRY_LIMIT] = None) -> None:
     
     start = time.time()
+    if log: print("--------- disseminate_block")
+        
     broadcast_list = get_all_sets_for_validator(network, sender) if to_sets is None else to_sets
     network.validators[sender].log_block(item)
     networkItem = NetworkBlock(item=item, info_sets=broadcast_list)
@@ -75,16 +77,15 @@ def disseminate_block(network: Network,
     for info_set_index in broadcast_list:
         broadcast_validators |= set(network.sets[info_set_index].validators)
         
-    if log: print("--------- disseminate_block\ngoing to ask to check backlog", time.time() - start)
+    if log: print("going to ask to check backlog", time.time() - start)
     ask_to_check_backlog(network, broadcast_validators)
-    if log: print("backlog done", time.time() - start, "\n--------- end disseminate_block", time.time() - start)
+    if log: print("--------- end disseminate_block", time.time() - start)
 
 def disseminate_attestations(network: Network, items: Sequence[Tuple[ValidatorIndex, Attestation]]) -> None:
-    # List of attestations comes in
-    # - Senders are logged
-    # - Obtain list of recipients, have them check backlog
+    
     start = time.time()
     if log: print("--------- disseminate_attestations", len(items), "attestations")
+        
     broadcast_validators = set()
     for item in items:
         sender = item[0]
@@ -100,7 +101,7 @@ def disseminate_attestations(network: Network, items: Sequence[Tuple[ValidatorIn
      
     if log: print("going to ask to check backlog", time.time() - start)
     ask_to_check_backlog(network, broadcast_validators)
-    if log: print("backlog done", time.time() - start, "\n--------- end disseminate_attestations", time.time() - start)
+    if log: print("--------- end disseminate_attestations", time.time() - start)
     
 def update_network(network: Network) -> None:
     start = time.time()

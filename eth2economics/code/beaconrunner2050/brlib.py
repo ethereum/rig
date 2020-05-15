@@ -35,6 +35,9 @@ def skip_genesis_block(validators):
 ## State transitions
 
 def tick(params, step, sL, s, _input):
+    start = time.time()
+    if log: print("---------- tick")
+    
     network = s["network"]
     
     if random.random() < 1:
@@ -49,28 +52,32 @@ def tick(params, step, sL, s, _input):
         print("synced clock of validators showing time =", network.validators[0].data.time_ms, "slot", network.validators[0].data.slot,
               int(((network.validators[0].store.time - network.validators[0].store.genesis_time) % (specs.SECONDS_PER_SLOT)) / 4), "/ 3"
              )
-            
+    
+    if log: print("---------- tick", time.time() - start)
+    
     return ("network", network)
 
 def disseminate_attestations(params, step, sL, s, _input):
     start = time.time()
+    if log: print("---------- disseminate_attestations brlib")
     
     network = s["network"]
     nt.disseminate_attestations(network, _input["attestations"])
 
     if log: print("adding", len(_input["attestations"]), "to network items", "there are now", len(network.attestations), "attestations")
-    if log: print("disseminate_attestations time = ", time.time() - start)
+    if log: print("---------- end disseminate_attestations brlib", time.time() - start)
     
     return ('network', network)
 
 def disseminate_blocks(params, step, sL, s, _input):    
     start = time.time()
+    if log: print("---------- disseminate_blocks brlib")
     
     network = s["network"]
     for block in _input["blocks"]:
         nt.disseminate_block(network, block.message.proposer_index, block)
 
-    if log: print("disseminate_blocks time = ", time.time() - start)
+    if log: print("---------- end disseminate_blocks brlib", time.time() - start)
 
     return ('network', network)
 
