@@ -64,7 +64,7 @@ class BRValidator:
         self.update_proposer(current_state)
         self.update_data()
         
-    def update_time(self) -> None:
+    def update_time(self, frequency = frequency) -> None:
         self.data.time_ms += 1000 / frequency
         if self.data.time_ms % 1000 == 0:
             specs.on_tick(self.store, self.store.time + 1)
@@ -73,7 +73,7 @@ class BRValidator:
             if specs.get_current_slot(self.store) != self.data.slot:
                 self.update_data(new_slot = True)
                 
-    def forward_by(self, seconds) -> None:
+    def forward_by(self, seconds, frequency = frequency) -> None:
         number_ticks = seconds * frequency
         for i in range(number_ticks):
             self.update_time()
