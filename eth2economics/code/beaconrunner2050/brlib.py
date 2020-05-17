@@ -38,13 +38,21 @@ def tick(params, step, sL, s, _input):
     start = time.time()
     if log: print("---------- tick")
     
+    
+    frequency = params["frequency"]
+    network_update_rate = params["network_update_rate"]
+    
+    assert frequency >= update_rate
+    
     network = s["network"]
     
-    if random.random() < 1:
+    update_prob = float(network_update_rate) / float(frequency)
+    
+    if random.random() < update_prob:
         nt.update_network(network)
     
     for validator in network.validators:
-        validator.update_time()
+        validator.update_time(frequency)
     
     if network.validators[0].data.time_ms % 4000 == 0:
 #         print("validator 75 knows about", len(nt.knowledge_set(network, 75)["blocks"]), "blocks and", len(nt.knowledge_set(network, 75)["attestations"]), "attestations")
