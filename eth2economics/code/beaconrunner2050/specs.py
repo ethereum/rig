@@ -844,6 +844,7 @@ def process_slots(state: BeaconState, slot: Slot) -> None:
         process_slot(state)
         # Process epoch on the start slot of the next epoch
         if (state.slot + 1) % SLOTS_PER_EPOCH == 0:
+            print("process_epoch")
             process_epoch(state)
         state.slot += Slot(1)
 
@@ -1073,23 +1074,29 @@ def process_final_updates(state: BeaconState) -> None:
 
 def process_block(state: BeaconState, block: BeaconBlock, log = False) -> None:
     start = time.time()
-    process_block_header(state, block)
+    process_block_header(state, block, log)
     if log: print("--- process_block\nprocessed block header", time.time() - start)
     process_randao(state, block.body)
     if log: print("processed randao", time.time() - start)
     process_eth1_data(state, block.body)
     if log: print("processed eth1data", time.time() - start)
-    process_operations(state, block.body, log)
+    process_operations(state, block.body)
     if log: print("processed operations", time.time() - start, "\n---")
 
 
-def process_block_header(state: BeaconState, block: BeaconBlock) -> None:
+def process_block_header(state: BeaconState, block: BeaconBlock, log = False) -> None:
     # Verify that the slots match
+    if log: print("-- process_block_header")
     assert block.slot == state.slot
+    if log: print("block matches slot")
     # Verify that proposer index is the correct index
     assert block.proposer_index == get_beacon_proposer_index(state)
+    if log: print("correct proposer")
     # Verify that the parent matches
+    if log: print("parent_root", block.parent_root)
+    if log: print("lbh", hash_tree_root(state.latest_block_header))
     assert block.parent_root == hash_tree_root(state.latest_block_header)
+    if log: print("parent matches")
     # Cache current block as the new latest block
     state.latest_block_header = BeaconBlockHeader(
         slot=block.slot,
@@ -1121,24 +1128,19 @@ def process_eth1_data(state: BeaconState, body: BeaconBlockBody) -> None:
         state.eth1_data = body.eth1_data
 
 
-def process_operations(state: BeaconState, body: BeaconBlockBody, log = False) -> None:
-    start = time.time()
+def process_operations(state: BeaconState, body: BeaconBlockBody) -> None:
     # Verify that outstanding deposits are processed up to the maximum number of deposits
     assert len(body.deposits) == min(MAX_DEPOSITS, state.eth1_data.deposit_count - state.eth1_deposit_index)
 
     def for_ops(operations: Sequence[Any], fn: Callable[[BeaconState, Any], None]) -> None:
         for operation in operations:
-            fn(state, operation, log)
+            fn(state, operation)
 
-#     for_ops(body.proposer_slashings, process_proposer_slashing)
-#     for_ops(body.attester_slashings, process_attester_slashing)
-    if log: print("--\nslashings done", time.time() - start)
+    for_ops(body.proposer_slashings, process_proposer_slashing)
+    for_ops(body.attester_slashings, process_attester_slashing)
     for_ops(body.attestations, process_attestation)
-    if log: print("attestations done", time.time() - start)
     for_ops(body.deposits, process_deposit)
-#     for_ops(body.voluntary_exits, process_voluntary_exit)
-    if log: print("remainder done", time.time() - start, "\n--")
-
+    for_ops(body.voluntary_exits, process_voluntary_exit)
 
 def process_proposer_slashing(state: BeaconState, proposer_slashing: ProposerSlashing) -> None:
     header_1 = proposer_slashing.signed_header_1.message
@@ -1489,7 +1491,7 @@ def on_tick(store: Store, time: uint64) -> None:
         store.justified_checkpoint = store.best_justified_checkpoint
 
 
-def on_block(store: Store, signed_block: SignedBeaconBlock, log = False) -> None:
+def on_block(store: Store, signed_block: SignedBeaconBlock, log = False, state = None) -> None:
     start = time.time()
         
     block = signed_block.message
@@ -1511,7 +1513,10 @@ def on_block(store: Store, signed_block: SignedBeaconBlock, log = False) -> None
     if log: print("descendent of finalized", time.time() - start)
 
     # Check the block is valid and compute the post-state
-    state = state_transition(pre_state, signed_block, True, log = log)
+    if state is None:
+        state = state_transition(pre_state, signed_block, True, log = log)
+    else:
+        process_block(state, signed_block.message, log = log)
     if log: print("state transition over", time.time() - start)
     # Add new state for this block to the store
     store.block_states[hash_tree_root(block)] = state

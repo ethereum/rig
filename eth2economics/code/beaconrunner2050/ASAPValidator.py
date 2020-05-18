@@ -18,8 +18,8 @@ class ASAPValidator(vlib.BRValidator):
         # Already attested for this slot
         if self.data.last_slot_attested == self.data.slot:
             return None
-
-        # good boi attest
+            
+        # honest attest
         return vlib.honest_attest(self, known_items)
     
     def propose(self, known_items) -> Optional[specs.SignedBeaconBlock]:
@@ -31,5 +31,5 @@ class ASAPValidator(vlib.BRValidator):
         if self.data.last_slot_proposed == self.data.slot:
             return None
         
-        # good boi propose
+        # honest propose
         return vlib.honest_propose(self, known_items)
