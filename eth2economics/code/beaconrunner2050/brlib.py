@@ -3,14 +3,11 @@ import specs
 import network as nt
 import time
 import random
-random.seed(12345678)
 
 from eth2spec.utils.ssz.ssz_impl import hash_tree_root
 from eth2spec.utils.ssz.ssz_typing import Bitlist
 from eth2spec.utils.hash_function import hash
 from eth2 import eth_to_gwei
-
-log = False
     
 ## Initialisation
 
@@ -35,56 +32,42 @@ def skip_genesis_block(validators):
 ## State transitions
 
 def tick(_params, step, sL, s, _input):
-    start = time.time()
-    print("---------- tick")
+    # Move the simulation by one step
         
     frequency = _params[0]["frequency"]
     network_update_rate = _params[0]["network_update_rate"]
     
+    # Probably overkill
     assert frequency >= network_update_rate
     
     network = s["network"]
     
     update_prob = float(network_update_rate) / float(frequency)
     
+    # If we draw a success, based on `update_prob`, update the network
     if random.random() < update_prob:
-        if log: print(">>> update network")
         nt.update_network(network)
-    
+        
+    # Push validators' clocks by one step
     for validator in network.validators:
         validator.update_time(frequency)
-    
-    if network.validators[0].data.time_ms % 4000 == 0:
-        print("synced clock of validators showing time =", network.validators[0].data.time_ms, "slot", network.validators[0].data.slot,
-              int(((network.validators[0].store.time - network.validators[0].store.genesis_time) %
-                   (specs.SECONDS_PER_SLOT)) / 4), "/ 3"
-             )
-    
-    if log: print("---------- end tick", time.time() - start)
-    
+        
     return ("network", network)
 
 def disseminate_attestations(_params, step, sL, s, _input):
-    start = time.time()
+    # Get the attestations and disseminate them on-the-wire
     
     network = s["network"]
     nt.disseminate_attestations(network, _input["attestations"])
-
-#     if log: print("adding", len(_input["attestations"]), "to network items", "there are now", len(network.attestations), "attestations")
-    if log: print("disseminate_attestations brlib", time.time() - start)
     
     return ('network', network)
 
-def disseminate_blocks(_params, step, sL, s, _input):    
-    start = time.time()
-    
-    if log: print("---------- disseminate_blocks brlib")
+def disseminate_blocks(_params, step, sL, s, _input):
+    # Get the blocks proposed and disseminate them on-the-wire
     
     network = s["network"]
     for block in _input["blocks"]:
         nt.disseminate_block(network, block.message.proposer_index, block)
-
-    if log: print("---------- end disseminate_blocks brlib", time.time() - start)
 
     return ('network', network)
 
@@ -93,7 +76,7 @@ def disseminate_blocks(_params, step, sL, s, _input):
 ### Attestations
 
 def attest_policy(_params, step, sL, s):
-    start = time.time()
+    # Pinging validators to check if anyone wants to attest
     
     network = s['network']
     produced_attestations = []
@@ -103,15 +86,13 @@ def attest_policy(_params, step, sL, s):
         attestation = validator.attest(known_items)
         if attestation is not None:
             produced_attestations.append([validator_index, attestation])
-
-    if log: print("attest_policy time = ", time.time() - start)            
                 
     return ({ 'attestations': produced_attestations })
 
 ### Block proposal
 
 def propose_policy(_params, step, sL, s):
-    start = time.time()
+    # Pinging validators to check if anyone wants to propose a block
     
     network = s['network']
     produced_blocks = []
@@ -121,7 +102,5 @@ def propose_policy(_params, step, sL, s):
         block = validator.propose(known_items)
         if block is not None:
             produced_blocks.append(block)
-
-    if log: print("propose_policy time = ", time.time() - start)        
             
     return ({ 'blocks': produced_blocks })

@@ -811,23 +811,19 @@ def is_valid_genesis_state(state: BeaconState) -> bool:
     return True
 
 
-def state_transition(state: BeaconState, signed_block: SignedBeaconBlock, validate_result: bool=True, log: bool=False) -> BeaconState:
+def state_transition(state: BeaconState, signed_block: SignedBeaconBlock, validate_result: bool=True) -> BeaconState:
     start = time.time()
     block = signed_block.message
     # Process slots (including those with no blocks) since block
     process_slots(state, block.slot)
-    if log: print("---- state_transition\nprocessed_slots", time.time() - start)
     # Verify signature
     if validate_result:
         assert verify_block_signature(state, signed_block)
-    if log: print("verified_signature", time.time() - start)
     # Process block
-    process_block(state, block, log)
-    if log: print("processed block", time.time() - start)
+    process_block(state, block)
     # Verify state root
     if validate_result:
         assert block.state_root == hash_tree_root(state)
-    if log: print("validate result", time.time() - start, "\n----")
     # Return post-state
     return state
 
@@ -844,7 +840,6 @@ def process_slots(state: BeaconState, slot: Slot) -> None:
         process_slot(state)
         # Process epoch on the start slot of the next epoch
         if (state.slot + 1) % SLOTS_PER_EPOCH == 0:
-            print("process_epoch")
             process_epoch(state)
         state.slot += Slot(1)
 
@@ -951,7 +946,6 @@ def get_base_reward(state: BeaconState, index: ValidatorIndex) -> Gwei:
 
 
 def get_attestation_deltas(state: BeaconState) -> Tuple[Sequence[Gwei], Sequence[Gwei]]:
-    print("get att deltas")
     previous_epoch = get_previous_epoch(state)
     total_balance = get_total_active_balance(state)
     rewards = [Gwei(0) for _ in range(len(state.validators))]
@@ -1072,31 +1066,19 @@ def process_final_updates(state: BeaconState) -> None:
     state.current_epoch_attestations = []
 
 
-def process_block(state: BeaconState, block: BeaconBlock, log = False) -> None:
-    start = time.time()
-    process_block_header(state, block, log)
-    if log: print("--- process_block\nprocessed block header", time.time() - start)
+def process_block(state: BeaconState, block: BeaconBlock) -> None:
+    process_block_header(state, block)
     process_randao(state, block.body)
-    if log: print("processed randao", time.time() - start)
     process_eth1_data(state, block.body)
-    if log: print("processed eth1data", time.time() - start)
     process_operations(state, block.body)
-    if log: print("processed operations", time.time() - start, "\n---")
 
-
-def process_block_header(state: BeaconState, block: BeaconBlock, log = False) -> None:
+def process_block_header(state: BeaconState, block: BeaconBlock) -> None:
     # Verify that the slots match
-    if log: print("-- process_block_header")
     assert block.slot == state.slot
-    if log: print("block matches slot")
     # Verify that proposer index is the correct index
     assert block.proposer_index == get_beacon_proposer_index(state)
-    if log: print("correct proposer")
     # Verify that the parent matches
-    if log: print("parent_root", block.parent_root)
-    if log: print("lbh", hash_tree_root(state.latest_block_header))
     assert block.parent_root == hash_tree_root(state.latest_block_header)
-    if log: print("parent matches")
     # Cache current block as the new latest block
     state.latest_block_header = BeaconBlockHeader(
         slot=block.slot,
@@ -1180,7 +1162,7 @@ def process_attester_slashing(state: BeaconState, attester_slashing: AttesterSla
     assert slashed_any
 
 
-def process_attestation(state: BeaconState, attestation: Attestation, log = False) -> None:
+def process_attestation(state: BeaconState, attestation: Attestation) -> None:
     start = time.time()
     
     data = attestation.data
@@ -1189,13 +1171,9 @@ def process_attestation(state: BeaconState, attestation: Attestation, log = Fals
     assert data.target.epoch == compute_epoch_at_slot(data.slot)
     assert data.slot + MIN_ATTESTATION_INCLUSION_DELAY <= state.slot <= data.slot + SLOTS_PER_EPOCH
     
-    if log: print("-\nasserts done", time.time() - start)
-
     committee = get_beacon_committee(state, data.slot, data.index)
     assert len(attestation.aggregation_bits) == len(committee)
     
-    if log: print("get beacon committee done", time.time() - start)
-
     pending_attestation = PendingAttestation(
         data=data,
         aggregation_bits=attestation.aggregation_bits,
@@ -1203,21 +1181,17 @@ def process_attestation(state: BeaconState, attestation: Attestation, log = Fals
         proposer_index=get_beacon_proposer_index(state),
     )
     
-    if log: print("get pending att done", time.time() - start)
-
     if data.target.epoch == get_current_epoch(state):
         assert data.source == state.current_justified_checkpoint
         state.current_epoch_attestations.append(pending_attestation)
     else:
         assert data.source == state.previous_justified_checkpoint
         state.previous_epoch_attestations.append(pending_attestation)
-    if log: print("checks final just", time.time() - start)
     
     # Verify signature
     # assert is_valid_indexed_attestation(state, get_indexed_attestation(state, attestation))
-    if log: print("end process", time.time() - start, "\n-")
 
-def process_deposit(state: BeaconState, deposit: Deposit, log = False) -> None:
+def process_deposit(state: BeaconState, deposit: Deposit) -> None:
     # Verify the Merkle branch
 #     assert is_valid_merkle_branch(
 #         leaf=hash_tree_root(deposit.data),
@@ -1491,7 +1465,7 @@ def on_tick(store: Store, time: uint64) -> None:
         store.justified_checkpoint = store.best_justified_checkpoint
 
 
-def on_block(store: Store, signed_block: SignedBeaconBlock, log = False, state = None) -> None:
+def on_block(store: Store, signed_block: SignedBeaconBlock, state = None) -> None:
     start = time.time()
         
     block = signed_block.message
@@ -1503,24 +1477,20 @@ def on_block(store: Store, signed_block: SignedBeaconBlock, log = False, state =
     # Add new block to the store
     store.blocks[hash_tree_root(block)] = block
     
-    if log: print("----- on_block\nadded block to store", time.time() - start)
-
     # Check that block is later than the finalized epoch slot (optimization to reduce calls to get_ancestor)
     finalized_slot = compute_start_slot_at_epoch(store.finalized_checkpoint.epoch)
     assert block.slot > finalized_slot
     # Check block is a descendant of the finalized block at the checkpoint finalized slot
     assert get_ancestor(store, hash_tree_root(block), finalized_slot) == store.finalized_checkpoint.root
-    if log: print("descendent of finalized", time.time() - start)
 
     # Check the block is valid and compute the post-state
     if state is None:
-        state = state_transition(pre_state, signed_block, True, log = log)
+        state = state_transition(pre_state, signed_block, True)
     else:
-        process_block(state, signed_block.message, log = log)
-    if log: print("state transition over", time.time() - start)
+        process_block(state, signed_block.message)
+
     # Add new state for this block to the store
     store.block_states[hash_tree_root(block)] = state
-    if log: print("state added to store", time.time() - start)
 
     # Update justified checkpoint
     if state.current_justified_checkpoint.epoch > store.justified_checkpoint.epoch:
@@ -1528,7 +1498,6 @@ def on_block(store: Store, signed_block: SignedBeaconBlock, log = False, state =
             store.best_justified_checkpoint = state.current_justified_checkpoint
         if should_update_justified_checkpoint(store, state.current_justified_checkpoint):
             store.justified_checkpoint = state.current_justified_checkpoint
-    if log: print("justified checkpoint updated", time.time() - start)
 
     # Update finalized checkpoint
     if state.finalized_checkpoint.epoch > store.finalized_checkpoint.epoch:
@@ -1542,8 +1511,6 @@ def on_block(store: Store, signed_block: SignedBeaconBlock, log = False, state =
             or get_ancestor(store, store.justified_checkpoint.root, finalized_slot) != store.finalized_checkpoint.root
         ):
             store.justified_checkpoint = state.current_justified_checkpoint
-    if log: print("finalized checkpoint updated", time.time() - start, "\n-----")
-
 
 def on_attestation(store: Store, attestation: Attestation) -> None:
     """

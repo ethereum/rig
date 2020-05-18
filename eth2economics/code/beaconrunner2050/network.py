@@ -34,8 +34,14 @@ class NetworkBlock(object):
 class Network(object):
     validators: List[BRValidator, VALIDATOR_REGISTRY_LIMIT]
     sets: List[NetworkSet, VALIDATOR_REGISTRY_LIMIT]
+    
+    # In a previous implementation, we kept attestations and blocks in the same queue.
+    # This was unwieldy. We can extend this easily by adding `Attester/ProposerSlashing`s
     attestations: List[NetworkAttestation, VALIDATOR_REGISTRY_LIMIT] = field(default_factory=list)
     blocks: List[NetworkBlock, VALIDATOR_REGISTRY_LIMIT] = field(default_factory=list)
+        
+    # We have the possibility of malicious validators refusing to propagate messages.
+    # Unused so far and untested too.
     malicious: List[ValidatorIndex, VALIDATOR_REGISTRY_LIMIT] = field(default_factory=list)
 
 def get_all_sets_for_validator(network: Network, validator_index: ValidatorIndex) -> Sequence[NetworkSetIndex]:
@@ -57,48 +63,51 @@ def ask_to_check_backlog(network: Network,
     # Asks validators to check if they can e.g., definitely include attestations in their
     # latest messages or record blocks.
     
-    start = time.time()
-    if log: print("-------- ask_to_check_backlog")
     for validator_index in validator_indices:
         validator = network.validators[validator_index]
         
         # Check if there are pending attestations/blocks that can be recorded
         known_items = knowledge_set(network, validator_index)
         validator.check_backlog(known_items)
-    if log: print("-------- end ask_to_check_backlog", time.time() - start)
         
 def disseminate_block(network: Network,
                       sender: ValidatorIndex,
                       item: SignedBeaconBlock,
                       to_sets: List[NetworkSetIndex, VALIDATOR_REGISTRY_LIMIT] = None) -> None:
+    # `sender` disseminates a block to its information sets, i.e., other validators they are peering
+    # with.
     
-    start = time.time()
-    if log: print("--------- disseminate_block")
-        
+    # Getting all the sets that `sender` belongs to
     broadcast_list = get_all_sets_for_validator(network, sender) if to_sets is None else to_sets
+    
+    # The validator records that they have sent a block
     network.validators[sender].log_block(item)
+    
+    # Adding the block to network items
     networkItem = NetworkBlock(item=item, info_sets=broadcast_list)
     network.blocks.append(networkItem)
     
+    # A set of all validators who need to update their internals after reception of the block
     broadcast_validators = set()
     for info_set_index in broadcast_list:
         broadcast_validators |= set(network.sets[info_set_index].validators)
         
-    if log: print("going to ask to check backlog", time.time() - start)
     ask_to_check_backlog(network, broadcast_validators)
-    if log: print("--------- end disseminate_block", time.time() - start)
 
 def disseminate_attestations(network: Network, items: Sequence[Tuple[ValidatorIndex, Attestation]]) -> None:
+    # We get a set of attestations and disseminate them over the network
     
-    start = time.time()
-    if log: print("--------- disseminate_attestations", len(items), "attestations")
-        
+    # Finding out who receives a new attestation
     broadcast_validators = set()
     for item in items:
         sender = item[0]
         attestation = item[1]
         broadcast_list = get_all_sets_for_validator(network, sender)
+        
+        # The sender records that they have sent an attestation
         network.validators[sender].log_attestation(attestation)
+        
+        # Adding the attestation to network items
         networkItem = NetworkAttestation(item=attestation, info_sets=broadcast_list)
         network.attestations.append(networkItem)
         
@@ -106,23 +115,27 @@ def disseminate_attestations(network: Network, items: Sequence[Tuple[ValidatorIn
         for info_set_index in broadcast_list:
             broadcast_validators |= set(network.sets[info_set_index].validators)
      
-    if log: print("going to ask to check backlog", time.time() - start)
     ask_to_check_backlog(network, broadcast_validators)
-    if log: print("--------- end disseminate_attestations", time.time() - start)
     
 def update_network(network: Network) -> None:
-    start = time.time()
-    if log: print("--------- update_network")
+    # The "heartbeat" of the network. When called, items propagate one step further on the network.
     
+    # We need to propagate both blocks and attestations
     item_sets = [network.blocks, network.attestations]
     
+    # These are the validators who receive a new item (block or attestation)
     broadcast_validators = set()
     
     for item_set in item_sets:
         for item in item_set:
+            # For each item, we find the new validators who hear about it for the first time
+            # and the validators who already do. Items propagate from validators who know about them.
             known_validators = set()
             for info_set in item.info_sets:
                 known_validators = known_validators.union(set(network.sets[info_set].validators))
+                
+            # When a validator belongs to a set A where the item was propagated AND
+            # to a set B where it wasn't, the validator propagates the item to set B
             unknown_sets = [i for i, s in enumerate(network.sets) if i not in item.info_sets]
             for unknown_set in unknown_sets:
                 new_validators = set(network.sets[unknown_set].validators)
@@ -132,6 +145,4 @@ def update_network(network: Network) -> None:
                         broadcast_validators |= new_validators
                         break
     
-    if log: print("will ask to check backlog", time.time() - start)
     ask_to_check_backlog(network, broadcast_validators)
-    if log: print("--------- end update_network", time.time() - start)
