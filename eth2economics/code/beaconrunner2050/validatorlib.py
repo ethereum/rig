@@ -6,8 +6,9 @@ import specs
 from eth2spec.utils.ssz.ssz_impl import hash_tree_root
 from eth2spec.utils.ssz.ssz_typing import Container, List, uint64, Bitlist, Bytes32
 
-log = True
-logged_val = 1
+logging = False
+logged_val = 2
+log = lambda index: logged_val == "*" or (logging and logged_val == index)
 
 frequency = 1
 assert frequency in [1, 10, 100, 1000] 
@@ -36,16 +37,28 @@ class ValidatorData:
     last_slot_attested: Optional[specs.Slot]
     current_proposer_duties: Sequence[bool]
     last_slot_proposed: Optional[specs.Slot]
-    recorded_attestations: Sequence[specs.Root]
+    recorded_attestations: List[specs.Root, specs.VALIDATOR_REGISTRY_LIMIT]
 
+class HashableStore(Container):
+    recorded_attestations: List[specs.Root, specs.VALIDATOR_REGISTRY_LIMIT]
+    recorded_blocks: List[specs.Root, specs.VALIDATOR_REGISTRY_LIMIT]
+        
 class BRValidator:
     validator_index: specs.ValidatorIndex
     store: specs.Store
     history: List[ValidatorMove, specs.VALIDATOR_REGISTRY_LIMIT]
     data: ValidatorData
+        
+    ### Static caches for expensive operations
+    # head_store stores a map from store hash to head root
+    head_store: Dict[specs.Root, specs.Root] = {}
+    # state_store stores a map from (current_state_hash, to_slot) calling
+    # process_slots(current_state, to_slot)
+    state_store: Dict[Tuple[specs.Root, specs.Slot], specs.BeaconState] = {}
 
     def __init__(self, state, validator_index):
         self.validator_index = validator_index
+        
         self.store = specs.get_forkchoice_store(state)
         self.history = []
         
@@ -56,13 +69,40 @@ class BRValidator:
         self.data.slot = specs.get_current_slot(self.store)
         self.data.current_epoch = specs.compute_epoch_at_slot(self.data.slot)
         
-        self.data.head_root = specs.get_head(self.store)
+        self.data.head_root = self.get_head()
         current_state = state.copy()
         specs.process_slots(current_state, self.data.slot)
         
         self.update_attester(current_state, self.data.current_epoch)
         self.update_proposer(current_state)
         self.update_data()
+        
+    def get_hashable_store(self):
+        return HashableStore(
+            recorded_attestations = self.data.recorded_attestations,
+            recorded_blocks = list(self.store.blocks.keys())
+        )
+    
+    def get_head(self):
+        store_root = hash_tree_root(self.get_hashable_store())
+        if store_root in BRValidator.head_store:
+            return BRValidator.head_store[store_root]
+        else:
+            if logging: print(self.validator_index, "recomputing head")
+            head_root = specs.get_head(self.store)
+            BRValidator.head_store[store_root] = head_root
+            return head_root
+    
+    def process_to_slot(self, current_state_root, slot):
+        if (current_state_root, slot) in BRValidator.state_store:
+            if logging: print(self.validator_index, "not recomputing state, from", current_state_root, "to", slot)
+            return BRValidator.state_store[(current_state_root, slot)].copy()
+        else:
+            if logging: print(self.validator_index, "recomputing state", current_state_root, slot)
+            current_state = self.store.block_states[current_state_root].copy()
+            specs.process_slots(current_state, slot)
+            BRValidator.state_store[(current_state_root, slot)] = current_state
+            return current_state.copy()
         
     def update_time(self, frequency = frequency) -> None:
         self.data.time_ms += 1000 / frequency
@@ -71,7 +111,7 @@ class BRValidator:
             
             # If a new slot starts, we update
             if specs.get_current_slot(self.store) != self.data.slot:
-                self.update_data(new_slot = True)
+                self.update_data()
                 
     def forward_by(self, seconds, frequency = frequency) -> None:
         number_ticks = seconds * frequency
@@ -79,7 +119,7 @@ class BRValidator:
             self.update_time()
     
     def update_attester(self, current_state, epoch):
-        if self.validator_index == logged_val and log: print(">>> recomputing attester")
+        if log(self.validator_index): print(">>> recomputing attester")
         current_epoch = specs.get_current_epoch(current_state)
         # When is the validator scheduled to attest in `epoch`?
         (committee, committee_index, attest_slot) = specs.get_committee_assignment(
@@ -96,7 +136,7 @@ class BRValidator:
             self.data.next_committee = committee
     
     def update_proposer(self, current_state):
-        if self.validator_index == logged_val and log: print(">>> recomputing proposer")
+        if log(self.validator_index): print(">>> recomputing proposer")
         current_epoch = specs.get_current_epoch(current_state)
         
         start_slot = specs.compute_start_slot_at_epoch(current_epoch)
@@ -110,6 +150,9 @@ class BRValidator:
                 current_proposer_duties += [False]
                 continue
             
+            if log(self.validator_index):
+                print("start_state.slot", start_state.slot, "slot to check", slot)
+                
             specs.process_slots(start_state, slot)
             current_proposer_duties += [specs.get_beacon_proposer_index(start_state) == self.validator_index]
                 
@@ -125,8 +168,10 @@ class BRValidator:
         slots_proposed = sorted([log.slot for log in self.history if log.move == "propose"], reverse = True)
         self.data.last_slot_proposed = None if len(slots_proposed) == 0 else slots_proposed[0]
     
-    def update_data(self, new_slot = False) -> None:
+    def update_data(self) -> None:
         start = time.time()
+        if log(self.validator_index): print("------", self.validator_index, "update_data")
+            
         # The head may change if we recorded a new block/new attestation
         # Attester/proposer responsibilities may change if head changes *and*
         # canonical chain changes to further back from start current epoch
@@ -142,68 +187,64 @@ class BRValidator:
         # - If x between start of previous epoch and start of current epoch (--||--x---|-- , || = start previous epoch)
         #   proposer changes but not attester
         # - If x before start of previous epoch (--x--||-----|----) both proposer and attester change
-        if self.validator_index == logged_val and log: print("------ update_data")
+        
         slot = specs.get_current_slot(self.store)
+        new_slot = self.data.slot != slot
     
         # Current epoch in validator view
         current_epoch = specs.compute_epoch_at_slot(slot)
 
         self.update_attest_move()
         self.update_propose_move()
-        if self.validator_index == logged_val and log: print("updated moves", time.time() - start)
+        if log(self.validator_index): print("updated moves", time.time() - start)
         
         # Did the validator receive a block in this slot?
         received_block = len([block for block_root, block in self.store.blocks.items() if block.slot == slot]) > 0
-        if self.validator_index == logged_val and log: print("updated received", time.time() - start)
+        if log(self.validator_index): print("updated received", time.time() - start)
         
         if not new_slot:
             # It's not a new slot, we are here because a new block/attestation was received
             
             # Getting the current state, fast-forwarding from the head
-            head_root = specs.get_head(self.store)
-            if self.validator_index == logged_val and log: print("got head", time.time() - start)
+            head_root = self.get_head()
+            if log(self.validator_index): print("got head", time.time() - start)
 
             if self.data.head_root != head_root:
-                lca = lowest_common_ancestor(self.store, self.data.head_root, head_root, self.validator_index == logged_val and log)
+                lca = lowest_common_ancestor(
+                    self.store, self.data.head_root, head_root, log(self.validator_index))
                 lca_epoch = specs.compute_epoch_at_slot(lca.slot)
 
                 if lca_epoch == current_epoch:
                     # do nothing
                     pass
                 else:
-                    head_state = self.store.block_states[head_root]
-                    current_state = head_state.copy()
-                    specs.process_slots(current_state, slot)
+                    current_state = self.process_to_slot(head_root, slot)
                     if lca_epoch == current_epoch - 1:
                         self.update_proposer(current_state)
                     else:
                         self.update_proposer(current_state)
                         self.update_attester(current_state, current_epoch)
                 self.data.head_root = head_root
+                if log(self.validator_index): print("updated proposers/attesters", time.time() - start)
                 
         else:
             # It's a new slot. We should update our proposer/attester duties
             # if it's also a new epoch. If not we do nothing.
-            if self.data.current_epoch == current_epoch:
-                pass
-            
-            current_state = self.store.block_states[self.data.head_root].copy()
-            specs.process_slots(current_state, slot)
+            if self.data.current_epoch != current_epoch:
+                current_state = self.process_to_slot(self.data.head_root, slot)
 
-            # We need to check our proposer role for this new epoch
-            self.update_proposer(current_state)
+                # We need to check our proposer role for this new epoch
+                self.update_proposer(current_state)
 
-            # We need to check our attester role for this new epoch
-            self.update_attester(current_state, current_epoch)
-            
-            
-        
-        if self.validator_index == logged_val and log: print("updated proposers/attesters", time.time() - start)
+                # We need to check our attester role for this new epoch
+                self.update_attester(current_state, current_epoch)
+                
+                if log(self.validator_index): print("updated proposers/attesters", time.time() - start)
             
         self.data.slot = slot
         self.data.current_epoch = current_epoch
         self.data.received_block = received_block
-        if self.validator_index == logged_val and log: print("------ update_data", time.time() - start)
+        if log(self.validator_index): print("------ update_data", time.time() - start)
         
     def log_block(self, item: specs.SignedBeaconBlock) -> None:
         self.history.append(ValidatorMove(
@@ -211,6 +252,7 @@ class BRValidator:
             slot = item.message.slot,
             move = "propose"
         ))
+        self.update_propose_move()
 
     def log_attestation(self, item: specs.Attestation) -> None:
         self.history.append(ValidatorMove(
@@ -218,71 +260,77 @@ class BRValidator:
             slot = item.data.slot,
             move = "attest"
         ))
+        self.update_attest_move()
 
     def record_block(self, item: specs.SignedBeaconBlock) -> bool:
         # If we already know about the block, do nothing
         start = time.time()
-#         if self.validator_index == logged_val and log: print("------ record_block")
+        if log(self.validator_index): print("------ record_block")
         if hash_tree_root(item.message) in self.store.blocks:
-#             if self.validator_index == logged_val and log: print("I already know block", time.time() - start)
+#             if log(self.validator_index): print("I already know block", time.time() - start)
             return False
                 
         try:
-            specs.on_block(self.store, item)
-#             if self.validator_index == logged_val and log: print("Recorded block", time.time() - start)
+            state = self.process_to_slot(item.message.parent_root, item.message.slot)
+            specs.on_block(self.store, item,
+                           log = log(self.validator_index),
+                           state = state)
+            if log(self.validator_index): print("Recorded block", time.time() - start)
         except:
-#             if self.validator_index == logged_val and log: print("------ end record_block")
+            if log(self.validator_index):
+                print("Error recording\n------ end record_block", time.time() - start)
             return False
         
         for attestation in item.message.body.attestations:
-#             if self.validator_index == logged_val and log: print("Recording attestation from block", time.time() - start)
             self.record_attestation(attestation)
         
-#         if self.validator_index == logged_val and log: print("on_block done, atts recorded", time.time() - start, "\n------ end record_block")
+        if log(self.validator_index):
+            print("on_block done, atts recorded\n------ end record_block", time.time() - start)
         return True
 
     def record_attestation(self, item: specs.Attestation) -> bool:
         start = time.time()
-#         if self.validator_index == logged_val and log: print("------ record_attestation")
+#         if log(self.validator_index): print("------ record_attestation")
         
         att_hash = hash_tree_root(item)
         
         # If we have already seen this attestation, no need to go further
         if att_hash in self.data.recorded_attestations:
-#             if self.validator_index == logged_val and log: print("already know that att\n------ end record_attestation")
+#             if log(self.validator_index): print("already know that att\n------ end record_attestation")
             return False
         
         try:
             specs.on_attestation(self.store, item)
             self.data.recorded_attestations += [att_hash]
-#             if self.validator_index == logged_val and log: print("recorded att\n------ end record_attestation")
+#             if log(self.validator_index): print("recorded att\n------ end record_attestation")
             return True
         except:
-#             if self.validator_index == logged_val and log: print("error recording att\n------ end record_attestation")
+#             if log(self.validator_index): print("error recording att\n------ end record_attestation")
             return False
 
     def check_backlog(self, known_items: Dict[str, Sequence[Container]]) -> None:
         start = time.time()
-        if self.validator_index == logged_val and log: print("------- check_backlog")
+        if log(self.validator_index): print("------- check_backlog")
         recorded_blocks = 0
         for block in known_items["blocks"]:
             recorded = self.record_block(block.item)
             if recorded:
                 recorded_blocks += 1
-        if self.validator_index == logged_val and log: print("finished recording blocks", time.time() - start)
+        if log(self.validator_index): print("finished recording", recorded_blocks, "blocks", time.time() - start)
         
         recorded_attestations = 0
         for attestation in known_items["attestations"]:
             recorded = self.record_attestation(attestation.item)
             if recorded:
                 recorded_attestations += 1
-        if self.validator_index == logged_val and log: print("finished recording attestations", time.time() - start)
+        if log(self.validator_index): print("finished recording", recorded_attestations, "attestations", time.time() - start)
         
         if recorded_blocks > 0 or recorded_attestations > 0:
+            if log(self.validator_index): print("update data")
             self.update_data()
-        if self.validator_index == logged_val and log: print("done updating data", time.time() - start)
+        if log(self.validator_index): print("done updating data", time.time() - start)
         
-        if self.validator_index == logged_val and log: print("------- end check_backlog", time.time() - start)
+        if log(self.validator_index): print("------- end check_backlog", time.time() - start)
 
             
 def lowest_common_ancestor(store, old_head, new_head, log = False) -> Optional[specs.BeaconBlock]:
@@ -293,11 +341,11 @@ def lowest_common_ancestor(store, old_head, new_head, log = False) -> Optional[s
     current_block = store.blocks[new_head]
     keep_searching = True
     while keep_searching:
-        if log: print("keep searching")
+        if logging: print("keep searching")
         parent_root = current_block.parent_root
         parent_block = store.blocks[parent_root]
         if parent_root == old_head:
-            if log: print("parent is old head")
+            if logging: print("parent is old head")
             return store.blocks[old_head]
         elif parent_block.slot == 0 or \
         specs.compute_start_slot_at_epoch(store.finalized_checkpoint.epoch) > specs.compute_epoch_at_slot(parent_block.slot):
@@ -323,7 +371,9 @@ def lowest_common_ancestor(store, old_head, new_head, log = False) -> Optional[s
 ### Attestation strategies            
             
 def honest_attest(validator, known_items):
+    start = time.time()
     # Unpacking
+    if logging: print("----- honest_attest")
     validator_index = validator.validator_index
     store = validator.store
     committee_slot = validator.data.current_attest_slot
@@ -331,7 +381,7 @@ def honest_attest(validator, known_items):
     committee = validator.data.current_committee
     
     # What am I attesting for?
-    block_root = specs.get_head(store)
+    block_root = validator.get_head()
     head_state = store.block_states[block_root].copy()
     specs.process_slots(head_state, committee_slot)
     start_slot = specs.compute_start_slot_at_epoch(specs.get_current_epoch(head_state))
@@ -356,7 +406,8 @@ def honest_attest(validator, known_items):
         data=att_data
     )
     
-    if log: print("attestation", hash_tree_root(attestation), "for slot", committee_slot, "by validator", validator.validator_index, "source", store.justified_checkpoint.epoch, "and target", tgt_checkpoint.epoch)
+    if logging: print("attestation", hash_tree_root(attestation), "for slot", committee_slot, "by validator", validator.validator_index, "source", store.justified_checkpoint.epoch, "and target", tgt_checkpoint.epoch)
+    if logging: print("----- end honest_attest", time.time() - start)
 
     return attestation
 
@@ -388,7 +439,14 @@ def aggregate_attestations(attestations):
 
 ### Proposal strategies
 
+def compute_new_state_root(validator: BRValidator, head_root: specs.Root, block: specs.BeaconBlock) -> specs.Root:
+    print("comp new state root")
+    processed_state = validator.process_to_slot(head_root, block.slot)
+    specs.process_block(processed_state, block)
+    return hash_tree_root(processed_state)
+
 def honest_propose(validator, known_items):
+    print("----- honest_propose")
     slot = validator.data.slot
     head = validator.data.head_root
     
@@ -406,11 +464,11 @@ def honest_propose(validator, known_items):
         proposer_index = validator.validator_index
     )
     
-    state_root = specs.compute_new_state_root(validator.store.block_states[head].copy(), beacon_block)
+    state_root = compute_new_state_root(validator, head, beacon_block)
     beacon_block.state_root = state_root
     
     signed_beacon_block = specs.SignedBeaconBlock(message=beacon_block)
 
-    if log: print("honest validator", validator.validator_index, "propose a block for slot", slot)
-    if log: print("block contains", len(signed_beacon_block.message.body.attestations), "attestations")
+    if logging: print("honest validator", validator.validator_index, "propose a block for slot", slot)
+    if logging: print("block contains", len(signed_beacon_block.message.body.attestations), "attestations")
     return signed_beacon_block

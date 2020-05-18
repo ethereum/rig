@@ -11,7 +11,7 @@ from validatorlib import BRValidator
 
 from eth2spec.utils.ssz.ssz_typing import Container, List, uint64
 
-log = True
+log = False # set to True to receive an avalanche of messages
 
 class NetworkSetIndex(uint64):
     pass
@@ -37,11 +37,15 @@ class Network(object):
     attestations: List[NetworkAttestation, VALIDATOR_REGISTRY_LIMIT] = field(default_factory=list)
     blocks: List[NetworkBlock, VALIDATOR_REGISTRY_LIMIT] = field(default_factory=list)
     malicious: List[ValidatorIndex, VALIDATOR_REGISTRY_LIMIT] = field(default_factory=list)
-        
+
 def get_all_sets_for_validator(network: Network, validator_index: ValidatorIndex) -> Sequence[NetworkSetIndex]:
+    # Return indices of sets to which the validator belongs
+    
     return [i for i, s in enumerate(network.sets) if validator_index in s.validators]
 
 def knowledge_set(network: Network, validator_index: ValidatorIndex) -> Dict[str, Sequence[Container]]:
+    # Known attestations and blocks of validator `validator_index`
+    
     info_sets = set(get_all_sets_for_validator(network, validator_index))
     known_attestations = [item for item in network.attestations if len(set(item.info_sets) & info_sets) > 0]
     known_blocks = [item for item in network.blocks if len(set(item.info_sets) & info_sets) > 0]
@@ -49,6 +53,9 @@ def knowledge_set(network: Network, validator_index: ValidatorIndex) -> Dict[str
 
 def ask_to_check_backlog(network: Network,
                          validator_indices: Set[ValidatorIndex]) -> None:
+    # Called right after a message (block or attestation) was sent to `validator_indices`
+    # Asks validators to check if they can e.g., definitely include attestations in their
+    # latest messages or record blocks.
     
     start = time.time()
     if log: print("-------- ask_to_check_backlog")
