@@ -53,7 +53,7 @@ assert gasprice[t] >= b[t]
 
 - Cannot write EIP 1559 simple strategy basefee + fixed premium under that model.
 
-## Fixed escalator started on basefee:
+## Fixed escalator started on basefee
 
 ### User-specified parameters
 
@@ -82,6 +82,7 @@ assert gasprice[t] >= b[t]
 - Setting `startpremium = 0` means starting bid = basefee.
 
 ![](fixedesc.jpeg)
+_Bid in solid purple line, basefee in blue._
 
 ### Pros/cons
 
@@ -125,6 +126,7 @@ assert gasprice[t] >= b[t]
 Gas price set current basefee `b[t]` + current premium `p[t]`, bounded above by `maxfee`.
 
 ![](floatingesc.jpeg)
+_Bid in solid purple line, basefee in blue._
 
 ### Pros/cons
 
@@ -136,6 +138,7 @@ Gas price set current basefee `b[t]` + current premium `p[t]`, bounded above by 
 - Setting `startpremium = maxpremium` and some `maxfee`, this is equivalent to the EIP 1559 paradigm (with `endblock` far into the future).
 
 ![](floatingescfixedtip.jpeg)
+_Bid in solid purple line, basefee in blue._
 
 #### Cons
 
