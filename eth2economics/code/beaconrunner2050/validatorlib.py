@@ -77,7 +77,8 @@ class BRValidator:
         
         self.data.head_root = self.get_head()
         current_state = state.copy()
-        specs.process_slots(current_state, self.data.slot)
+        if current_state.slot < self.data.slot:
+            specs.process_slots(current_state, self.data.slot)
         
         self.update_attester(current_state, self.data.current_epoch)
         self.update_proposer(current_state)
@@ -117,7 +118,8 @@ class BRValidator:
         # If we haven't, we need to process it.
         else:
             current_state = self.store.block_states[current_state_root].copy()
-            specs.process_slots(current_state, slot)
+            if current_state.slot < slot:
+                specs.process_slots(current_state, slot)
             BRValidator.state_store[(current_state_root, slot)] = current_state
             return current_state.copy()
         
@@ -181,8 +183,10 @@ class BRValidator:
             if slot < start_state.slot:
                 current_proposer_duties += [False]
                 continue
+            
+            if start_state.slot < slot:
+                specs.process_slots(start_state, slot)
                 
-            specs.process_slots(start_state, slot)
             current_proposer_duties += [specs.get_beacon_proposer_index(start_state) == self.validator_index]
                 
         self.data.current_proposer_duties = current_proposer_duties
@@ -402,7 +406,8 @@ def honest_attest(validator, known_items):
     # What am I attesting for?
     block_root = validator.get_head()
     head_state = store.block_states[block_root].copy()
-    specs.process_slots(head_state, committee_slot)
+    if head_state.slot < committee_slot:
+        specs.process_slots(head_state, committee_slot)
     start_slot = specs.compute_start_slot_at_epoch(specs.get_current_epoch(head_state))
     epoch_boundary_block_root = block_root if start_slot == head_state.slot else specs.get_block_root_at_slot(head_state, start_slot)
     tgt_checkpoint = specs.Checkpoint(epoch=specs.get_current_epoch(head_state), root=epoch_boundary_block_root)
