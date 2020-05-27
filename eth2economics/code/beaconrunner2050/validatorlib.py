@@ -37,6 +37,7 @@ class ValidatorData:
     current_proposer_duties: Sequence[bool]
     last_slot_proposed: Optional[specs.Slot]
     recorded_attestations: List[specs.Root, specs.VALIDATOR_REGISTRY_LIMIT]
+    received_block: bool
 
 class HashableStore(Container):
     # We cache a map from current state of the `Store` to `head`, since `get_head`
@@ -126,8 +127,7 @@ class BRValidator:
     def update_time(self, frequency = frequency) -> None:
         # Moving validators' clocks by one step
         # To keep it simple, we assume frequency is a power of ten (see `assert` above)
-        
-        self.data.time_ms += 1000 / frequency
+        self.data.time_ms = self.data.time_ms + int(1000 / frequency)
         if self.data.time_ms % 1000 == 0:
             # The store is updated each second in the specs
             specs.on_tick(self.store, self.store.time + 1)
@@ -142,7 +142,7 @@ class BRValidator:
         
         number_ticks = seconds * frequency
         for i in range(number_ticks):
-            self.update_time()
+            self.update_time(frequency)
     
     def update_attester(self, current_state, epoch):
         # This is a fairly expensive operation, so we try not to call it when we don't have to.
@@ -228,17 +228,18 @@ class BRValidator:
 
         self.update_attest_move()
         self.update_propose_move()
-        
-        # Did the validator receive a block in this slot?
+                
+        # Did the validator record a block for this slot?
         received_block = len([block for block_root, block in self.store.blocks.items() if block.slot == slot]) > 0
         
         if not new_slot:
             # It's not a new slot, we are here because a new block/attestation was received
-            
+
             # Getting the current state, fast-forwarding from the head
             head_root = self.get_head()
-
+            
             if self.data.head_root != head_root:
+                # New head!
                 lca = lowest_common_ancestor(
                     self.store, self.data.head_root, head_root)
                 lca_epoch = specs.compute_epoch_at_slot(lca.slot)
@@ -270,7 +271,7 @@ class BRValidator:
         self.data.slot = slot
         self.data.current_epoch = current_epoch
         self.data.received_block = received_block
-        
+                
     def log_block(self, item: specs.SignedBeaconBlock) -> None:
         # Recording our own "block proposal" move in our own history
         
@@ -295,6 +296,8 @@ class BRValidator:
         # When a validator receives a block from the network, they call `record_block` to see
         # whether they should record it.
         
+#         print(self.validator_index, "maybe record block", hash_tree_root(item.message))
+        
         # If we already know about the block, do nothing
         if hash_tree_root(item.message) in self.store.blocks:
             return False
@@ -305,7 +308,10 @@ class BRValidator:
         try:
             state = self.process_to_slot(item.message.parent_root, item.message.slot)
             specs.on_block(self.store, item, state = state)
-        except:
+#             print(self.validator_index, "recorded block", str(hash_tree_root(item.message))[-6:], "->", str(item.message.parent_root)[-6:])
+        except AssertionError as e:
+            print(self.validator_index, "didn't record block", str(hash_tree_root(item.message))[-6:], "->", str(item.message.parent_root)[-6:])
+            print(e.args)
             return False
         
         # If attestations are included in the block, we want to record them
@@ -371,13 +377,12 @@ def lowest_common_ancestor(store, old_head, new_head) -> Optional[specs.BeaconBl
         parent_block = store.blocks[parent_root]
         if parent_root == old_head:
             return store.blocks[old_head]
-        elif parent_block.slot == 0 or \
-        specs.compute_start_slot_at_epoch(store.finalized_checkpoint.epoch) > specs.compute_epoch_at_slot(parent_block.slot):
+        elif parent_block.slot == 0:
             keep_searching = False
         else:
             new_head_ancestors += [parent_root]
             current_block = parent_block
-    
+        
     # At this point, old_head wasn't an ancestor to new_head
     # We need to find old_head's ancestors
     current_block = store.blocks[old_head]
@@ -387,10 +392,10 @@ def lowest_common_ancestor(store, old_head, new_head) -> Optional[specs.BeaconBl
         parent_block = store.blocks[parent_root]
         if parent_root in new_head_ancestors:
             return parent_block
-        elif parent_root == Bytes32() or \
-        specs.compute_start_slot_at_epoch(store.finalized_checkpoint.epoch) < specs.compute_epoch_at_slot(parent_block.slot):
+        elif parent_block.slot == 0:
             return None
-    
+        else:
+            current_block = parent_block
             
 ### Attestation strategies            
             
@@ -430,6 +435,8 @@ def honest_attest(validator, known_items):
         data=att_data
     )
     
+#     print(validator.validator_index, "attests for slot", committee_slot)
+    
     return attestation
 
 ### Aggregation helpers
@@ -460,15 +467,13 @@ def aggregate_attestations(attestations):
 
 ### Proposal strategies
 
-def compute_new_state_root(validator: BRValidator, head_root: specs.Root, block: specs.BeaconBlock) -> specs.Root:
-    # Normally defined in the specs, but we redefine it to use our cached process_slots
-    # The validator is going to create new block. Which state root to set?
-    # They fast-forward the chain from their chosen parent block to the slot they are proposing for
-    # and getting the resulting state root after processing their block.
+def should_process_attestation(state: specs.BeaconState, attestation: specs.Attestation) -> bool:
+    try:
+        specs.process_attestation(state.copy(), attestation)
+        return True
+    except:
+        return False
     
-    processed_state = validator.process_to_slot(head_root, block.slot)
-    specs.process_block(processed_state, block)
-    return hash_tree_root(processed_state)
 
 def honest_propose(validator, known_items):
     # Honest block proposal, using the current LMD-GHOST head and all known attestations,
@@ -477,7 +482,9 @@ def honest_propose(validator, known_items):
     slot = validator.data.slot
     head = validator.data.head_root
     
-    attestations = known_items["attestations"]
+    processed_state = validator.process_to_slot(head, slot)
+    
+    attestations = [att for att in known_items["attestations"] if should_process_attestation(processed_state, att.item)]
     attestations = aggregate_attestations([att.item for att in attestations if slot <= att.item.data.slot + specs.SLOTS_PER_EPOCH])
     
     beacon_block_body = specs.BeaconBlockBody(
@@ -491,9 +498,12 @@ def honest_propose(validator, known_items):
         proposer_index = validator.validator_index
     )
     
-    state_root = compute_new_state_root(validator, head, beacon_block)
+    specs.process_block(processed_state, beacon_block)
+    state_root = hash_tree_root(processed_state)
     beacon_block.state_root = state_root
     
     signed_beacon_block = specs.SignedBeaconBlock(message=beacon_block)
+    
+    print(validator.validator_index, "proposes block for slot", slot)
 
     return signed_beacon_block

@@ -1201,7 +1201,7 @@ def process_eth1_data(state: BeaconState, body: BeaconBlockBody) -> None:
 
 def process_operations(state: BeaconState, body: BeaconBlockBody) -> None:
     # Verify that outstanding deposits are processed up to the maximum number of deposits
-    assert len(body.deposits) == min(MAX_DEPOSITS, state.eth1_data.deposit_count - state.eth1_deposit_index)
+    # assert len(body.deposits) == min(MAX_DEPOSITS, state.eth1_data.deposit_count - state.eth1_deposit_index)
 
     def for_ops(operations: Sequence[Any], fn: Callable[[BeaconState, Any], None]) -> None:
         for operation in operations:
@@ -1258,7 +1258,7 @@ def process_attestation(state: BeaconState, attestation: Attestation) -> None:
     assert data.target.epoch in (get_previous_epoch(state), get_current_epoch(state))
     assert data.target.epoch == compute_epoch_at_slot(data.slot)
     assert data.slot + MIN_ATTESTATION_INCLUSION_DELAY <= state.slot <= data.slot + SLOTS_PER_EPOCH
-
+    
     committee = get_beacon_committee(state, data.slot, data.index)
     assert len(attestation.aggregation_bits) == len(committee)
 
@@ -1560,18 +1560,19 @@ def on_tick(store: Store, time: uint64) -> None:
 def on_block(store: Store, signed_block: SignedBeaconBlock, state: BeaconState = None) -> None:
     block = signed_block.message
     # Make a copy of the state to avoid mutability issues
-    assert block.parent_root in store.block_states
+    assert block.parent_root in store.block_states, "No parent in store"
     pre_state = store.block_states[block.parent_root].copy()
     # Blocks cannot be in the future. If they are, their consideration must be delayed until the are in the past.
-    assert get_current_slot(store) >= block.slot
+    assert get_current_slot(store) >= block.slot, "Block in the future"
+    
     # Add new block to the store
     store.blocks[hash_tree_root(block)] = block
 
     # Check that block is later than the finalized epoch slot (optimization to reduce calls to get_ancestor)
     finalized_slot = compute_start_slot_at_epoch(store.finalized_checkpoint.epoch)
-    assert block.slot > finalized_slot
+    assert block.slot > finalized_slot, "Block slot earlier than finalized epoch slot"
     # Check block is a descendant of the finalized block at the checkpoint finalized slot
-    assert get_ancestor(store, hash_tree_root(block), finalized_slot) == store.finalized_checkpoint.root
+    assert get_ancestor(store, hash_tree_root(block), finalized_slot) == store.finalized_checkpoint.root, "Block not a descendant of the finalized block at the checkpoint finalized slot"
 
     # Check the block is valid and compute the post-state
     if state is None:
