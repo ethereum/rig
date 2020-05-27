@@ -62,7 +62,6 @@ def ask_to_check_backlog(network: Network,
     # Called right after a message (block or attestation) was sent to `validator_indices`
     # Asks validators to check if they can e.g., definitely include attestations in their
     # latest messages or record blocks.
-    
     for validator_index in validator_indices:
         validator = network.validators[validator_index]
         

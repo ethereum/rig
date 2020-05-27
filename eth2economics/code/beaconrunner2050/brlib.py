@@ -33,7 +33,6 @@ def skip_genesis_block(validators):
 
 def tick(_params, step, sL, s, _input):
     # Move the simulation by one step
-        
     frequency = _params[0]["frequency"]
     network_update_rate = _params[0]["network_update_rate"]
     
@@ -47,16 +46,18 @@ def tick(_params, step, sL, s, _input):
     # If we draw a success, based on `update_prob`, update the network
     if random.random() < update_prob:
         nt.update_network(network)
-        
+    
     # Push validators' clocks by one step
     for validator in network.validators:
         validator.update_time(frequency)
+        
+    if s["timestep"] % 100 == 0:
+        print("timestep", s["timestep"], "of run", s["run"])
         
     return ("network", network)
 
 def disseminate_attestations(_params, step, sL, s, _input):
     # Get the attestations and disseminate them on-the-wire
-    
     network = s["network"]
     nt.disseminate_attestations(network, _input["attestations"])
     
