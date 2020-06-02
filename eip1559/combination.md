@@ -18,7 +18,7 @@
 
 **Linear escalator, given `startblock`, `endblock`, `startpremium` and `maxpremium`**
 
-- `p[t] = startpremium + (t - startblock) / (endblock - startblock) * (maxpremium - startpremium)
+- `p[t] = startpremium + (t - startblock) / (endblock - startblock) * (maxpremium - startpremium)`
 
 ## Escalating gas price without basefee reference
 
