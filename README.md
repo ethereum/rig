@@ -13,6 +13,7 @@ Ongoing effort to produce an incentives-focused testing environment for the beac
 - [Beacon Runner notebook introduction [Notebook]](eth2economics/code/beaconrunner/beacon_runner.ipynb)
 - [Beacon Runner 2049: Network partitions [Notebook]](eth2economics/code/beaconrunner2049/beacon_runner_2049.ipynb)
   - ["It's only wafer-thin" -- Preventing state explosion with observers [Notebook]](eth2economics/code/beaconrunner2049/observers/observed-br2049.ipynb)
+- [Beacon Runner 2050: An agent-based model of eth2 [Notebook]](eth2economics/code/beaconrunner2050/br2050.ipynb)
 
 #### Also
 
