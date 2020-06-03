@@ -1,0 +1,347 @@
+---
+title: "Exploring blocks, gas and transactions"
+description: |
+  A focus on the recent high gas prices, towards understanding high congestion regimes for EIP 1559.
+author:
+  - name: Barnabé Monnot 
+    url: https://twitter.com/barnabemonnot
+    affiliation: Robust Incentives Group, Ethereum Foundation
+    affiliation_url: https://github.com/ethereum/rig
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    toc: true
+    toc_depth: 3
+---
+
+```{r setup, message = FALSE}
+library(tidyverse)
+library(here)
+library(glue)
+library(lubridate)
+library(forecast)
+library(infer)
+library(matrixStats)
+library(rmarkdown)
+library(knitr)
+
+options(digits=10)
+options(scipen = 999) 
+
+# Make the plots a bit less pixellated
+knitr::opts_chunk$set(dpi = 200)
+
+# A minimal theme I like (zero bonus point for using it though!)
+newtheme <- theme_grey() + theme(
+  axis.text = element_text(size = 9),
+  axis.title = element_text(size = 12),
+  axis.line = element_line(colour = "#000000"),
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  panel.background = element_blank(),
+  legend.title = element_text(size = 12),
+  legend.text = element_text(size = 10),
+  legend.box.background = element_blank(),
+  legend.key = element_blank(),
+  strip.text.x = element_text(size = 10),
+  strip.background = element_rect(fill = "white")
+)
+theme_set(newtheme)
+```
+
+```{r}
+start_block <- 10000001
+end_block   <- 10100000
+suffix <- glue("-", start_block, "-", end_block)
+```
+
+```{r message = FALSE, eval=FALSE}
+txs <- read_csv(here::here(glue("data/txs", suffix, ".csv")))
+txs <- txs %>% select(-block_timestamp)
+txs %>% glimpse()
+```
+
+```{r message=FALSE, eval=FALSE}
+txs_receipts <- txs %>%
+  left_join(
+    read_csv(here::here(glue("data/rxs", suffix, ".csv"))),
+    by = c("hash" = "transaction_hash")) %>%
+  arrange(block_number)
+saveRDS(txs_receipts, here::here(glue("data/txs", suffix, ".rds")))
+```
+
+```{r message=FALSE, cache=TRUE}
+txs_receipts <- readRDS(here::here(glue("data/txs", suffix, ".rds"))) %>%
+  mutate(gas_fee = gas_price * gas_used) %>%
+  mutate(gas_price = gas_price / (10 ^ 9),
+         gas_fee = gas_fee / (10 ^ 9),
+         value = value / (10 ^ 18))
+```
+
+```{r message=FALSE, cache=TRUE}
+blocks <- read_csv(here::here(glue("data/bxs", suffix, ".csv"))) %>%
+  mutate(block_date = as_datetime(timestamp),
+         prop_used = gas_used / gas_limit) %>%
+  rename(block_number = number) %>%
+  arrange(block_number)
+
+gas_prices_per_block <- blocks %>%
+  select(block_number) %>%
+  left_join(
+    txs_receipts %>%
+      group_by(block_number) %>%
+      summarise(
+        min_gas_price = min(gas_price),
+        total_gas_used = sum(gas_used),
+        avg_gas_price = sum(gas_fee) / total_gas_used,
+        med_gas_price = weightedMedian(gas_price, w = gas_used),
+        max_gas_price = max(gas_price)
+      )
+  ) %>%
+  select(-total_gas_used)
+
+blocks <- blocks %>%
+  left_join(gas_prices_per_block)
+```
+
+```{r message=FALSE, cache=TRUE}
+date_sample <- interval(ymd("2020-05-13"), ymd("2020-05-20"))
+blocks_sample <- blocks %>%
+  filter(block_date %within% date_sample)
+
+txs_sample <- txs_receipts %>%
+  semi_join(blocks_sample)
+```
+
+While real world gallons of oil went negative, Ethereum gas prices have sustained a long period of high fees since the beginning of May. I wanted to dig in a bit deeper, with a view to understanding the fundamentals of the demand. Some of the charts below retrace steps that are very well-known to a lot of us -- these are mere restatements and updates.
+
+For instance, Onur Solmaz from Casper Labs wrote [a very nice post](https://solmaz.io/2019/10/21/gas-price-fee-volatility/) arguing that since we observe daily cycles, there must be something more than one-off ICOs and Ponzis at play.
+
+<aside>
+I was [as surprised as he was](https://ethresear.ch/t/daily-demand-cycle-and-intraday-gas-price-volatility/6330) that there aren't more posts investigating the same.
+</aside>
+
+We will see them here too, and a few more questions I thought were interesting (or at least, that I kinda knew the answer to but never had derived or played with myself). This is an excuse to play with my new Dappnode full node, using the wonderful [ethereum-etl](https://github.com/blockchain-etl/ethereum-etl) package from Evgeny Medvedev to extract transaction and block details.
+
+## Block properties
+
+### Gas used by a block
+
+Miners have some control over the gas limit of a block, but how much gas do blocks generally use?
+
+```{r}
+blocks %>%
+  ggplot() +
+  geom_histogram(aes(x = gas_used), bins = 1000) +
+  scale_y_log10()
+```
+
+There are a few peaks, notably at 0 (the amount of gas used by an empty block) and towards the maximum gas limit set at 10,000,000. Let's zoom in on blocks that use more than 9,800,000 gas.
+
+```{r}
+blocks %>%
+  filter(gas_used >= 9.8 * 10^6) %>%
+  ggplot() +
+  geom_histogram(aes(x = gas_used))
+```
+
+We can also look at the proportion of gas used, i.e., the amount of gas used by the block divided by the total gas available in that block. Taking a moving average over the last 500 blocks, we obtain the following plot.
+
+```{r}
+blocks_sample %>%
+  mutate(ma_prop_used = ma(prop_used, 500)) %>%
+  ggplot() +
+  geom_line(aes(x = block_date, y = ma_prop_used))
+```
+
+Where does the dip on May 15th come from?
+
+### Relationship between block size and gas used
+
+Does the block weight (in _gas_) roughly correlate with the block size (in _bytes_)?
+
+```{r}
+cor.test(blocks$gas_used, blocks$size)
+```
+
+It does! But since most blocks have very high `gas_used` anyways, it pays to look a bit more closely.
+
+```{r}
+blocks %>%
+  ggplot() +
+  geom_point(aes(x = gas_used, y = size)) +
+  scale_y_log10() +
+  xlab("Gas used per block") +
+  ylab("Block size (in bytes)")
+```
+
+We use a logarithmic scale for the y-axis. There is definitely a big spread around the 10 million gas limit. Does the block size correlate with the number of transactions instead then?
+
+```{r cache=TRUE}
+blocks_num_txs <- blocks %>%
+  left_join(
+    txs_receipts %>%
+      group_by(block_number) %>%
+      summarise(n = n())
+  ) %>%
+  replace_na(list(n = 0))
+```
+
+```{r}
+blocks_num_txs %>%
+  ggplot() +
+  geom_point(aes(x = n, y = size)) +
+  xlab("Number of transactions per block") +
+  ylab("Block size (in bytes)")
+```
+
+A transaction has a minimum size, if only to include things like the sender and receiver addresses and the other necessary fields. This is why we pretty much only observe values above some diagonal. The largest blocks (in bytes) are not the ones with the most transactions.
+
+## Gas prices
+
+### Evolution of gas prices
+
+I wanted to see how the gas prices evolve over time. To compute the average gas price in a block, I do a weighted mean using `gas_used` as weight. I then compute the average gas price over 100 blocks by doing another weighted mean using the total gas used in the blocks.
+
+```{r}
+chunk_size <- 100
+blocks_sample %>%
+  mutate(block_chunk = block_number %/% chunk_size) %>%
+  replace_na(list(
+    avg_gas_price = 0, gas_used = 0)) %>%
+  mutate(block_num = gas_used * avg_gas_price) %>%
+  group_by(block_chunk) %>%
+  summarise(avg_prop_used = mean(prop_used),
+            gas_used_chunk = sum(gas_used),
+            num_chunk = sum(block_num),
+            avg_gas_price = num_chunk / gas_used_chunk,
+            block_date = min(block_date)) %>%
+  ggplot() +
+  geom_line(aes(x = block_date, y = avg_gas_price), colour = "red")
+```
+
+We see a daily seasonality, with peaks and troughs corresponding to high congestion and low congestion hours of the day.
+
+### Timestamp difference between blocks
+
+```{r}
+blocks %>%
+  mutate(time_difference = timestamp - lag(timestamp)) %>%
+  ggplot() +
+  geom_histogram(aes(x = time_difference), binwidth = 1)
+```
+
+```{r cache=TRUE}
+late_blocks <- blocks %>%
+  mutate(time_difference = timestamp - lag(timestamp),
+         late_block = time_difference >= 20) %>%
+  replace_na(list(gas_used = 0, avg_gas_price = 0)) %>%
+  drop_na()
+
+mean_diff <- late_blocks %>%
+  specify(formula = avg_gas_price ~ late_block) %>%
+  calculate(stat = "diff in means", order = c(TRUE, FALSE))
+```
+
+```{r cache=TRUE}
+null_distribution <- late_blocks %>%
+  specify(formula = avg_gas_price ~ late_block) %>%
+  hypothesize(null = "independence") %>%
+  generate(reps = 500, type = "permute") %>%
+  calculate(stat = "diff in means", order = c(TRUE, FALSE))
+```
+
+We can do a simple difference-in-means test to check whether the difference between the average gas price of late blocks (with timestamp difference greater than 20 seconds) and early blocks (lesser than 20 seconds) is significant.
+
+```{r fig.cap="Mean gas price in \"late\" and \"early\" blocks"}
+kable(late_blocks %>%
+  group_by(late_block) %>%
+  summarise(avg_gas_price = mean(avg_gas_price)))
+```
+
+
+We find indeed that the average gas price of late blocks is significantly greater.
+
+```{r}
+null_distribution %>%
+  visualise(bins = 50) +
+  shade_p_value(obs_stat = mean_diff, direction = "greater")
+```
+
+### Do users like default prices?
+
+How do users set their gas prices? We can make the hypothesis that most rely on some oracle (e.g., the Eth Gas Station or their values appearing as Metamask defaults). We show next the 50 most frequent gas prices (in Gwei) and their frequency among included transactions.
+
+```{r cache=TRUE}
+gas_price_freqs <- txs_receipts %>%
+  group_by(gas_price) %>%
+  summarise(count = n()) %>%
+  arrange(-count) %>%
+  mutate(freq = count / nrow(txs_receipts), cumfreq = cumsum(freq),
+         `Gas price (Gwei)` = gas_price,
+         `Gas price (wei)` = round(gas_price * (10 ^ 9), 10)) %>%
+  mutate(frequency = str_c(round(freq * 100), "%"), cum_freq = str_c(round(cumfreq * 100), "%")) %>%
+  select(-freq, -cumfreq, -gas_price)
+```
+
+```{r}
+paged_table(gas_price_freqs %>%
+              select(`Gas price (Gwei)`, `Gas price (wei)`, count, frequency, cum_freq) %>%
+              filter(row_number() <= 50))
+```
+
+Clearly round numbers dominate here!
+
+<!-- ## What happened on May 14th? -->
+
+<!-- According to the chart, a fairly large spike in gas price happened on May 14th. Let's look at the median gas price per block on that date. -->
+
+<!-- ```{r} -->
+<!-- date_sample <- interval(ymd("2020-05-14"), ymd("2020-05-15")) -->
+<!-- blocks_sample <- blocks %>% -->
+<!--   filter(block_date %within% date_sample) -->
+
+<!-- txs_sample <- txs_receipts %>% -->
+<!--   semi_join(blocks_sample) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- blocks_sample %>% -->
+<!--   drop_na() %>% -->
+<!--   replace_na(list( -->
+<!--     avg_gas_price = 0, gas_used = 0, med_gas_price = 0, min_gas_price = 0)) %>% -->
+<!--   ggplot() + -->
+<!--   geom_line(aes(x = block_date, y = med_gas_price), colour = "red") + -->
+<!--   geom_line(aes(x = block_date, y = min_gas_price), colour = "blue") -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- blocks_sample %>% -->
+<!--   replace_na(list( -->
+<!--     max_gas_price = 0, avg_gas_price = 0, gas_used = 0, med_gas_price = 0, min_gas_price = 0)) %>% -->
+<!--   mutate(diff_max_min = max_gas_price - min_gas_price) %>% -->
+<!--   filter(diff_max_min <= 5000) %>% -->
+<!--   ggplot() + -->
+<!--   geom_histogram(aes(x = diff_max_min), bins = 100) + -->
+<!--   scale_y_log10() -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- blocks_sample %>% -->
+<!--   replace_na( -->
+<!--     list( -->
+<!--       max_gas_price = 0, -->
+<!--       avg_gas_price = 0, -->
+<!--       gas_used = 0, -->
+<!--       med_gas_price = 0, -->
+<!--       min_gas_price = 0 -->
+<!--     ) -->
+<!--   ) %>% -->
+<!--   add_column(ma_gas_price = as.matrix(ma(.$avg_gas_price, 50))) %>% -->
+<!--   mutate( -->
+<!--     time_difference = timestamp - lag(timestamp), -->
+<!--     min_price_rate = (min_gas_price - lag(min_gas_price)) / time_difference, -->
+<!--     med_price_rate = (med_gas_price - lag(med_gas_price)) / time_difference, -->
+<!--     ma_price_rate = (ma_gas_price - lag(ma_gas_price)) / time_difference) -->
+<!-- ``` -->
+
