@@ -10,22 +10,28 @@ A review of incentives in eth2, with models and simulations.
 
 Ongoing effort to produce an incentives-focused testing environment for the beacon chain.
 
-- [Beacon Runner notebook introduction [Notebook]](eth2economics/code/beaconrunner/beacon_runner.ipynb)
-- [Beacon Runner 2049: Network partitions [Notebook]](eth2economics/code/beaconrunner2049/beacon_runner_2049.ipynb)
-  - ["It's only wafer-thin" -- Preventing state explosion with observers [Notebook]](eth2economics/code/beaconrunner2049/observers/observed-br2049.ipynb)
-- [Beacon Runner 2050: An agent-based model of eth2 [Notebook]](eth2economics/code/beaconrunner2050/br2050.ipynb)
+- [Beacon Runner notebook introduction (Notebook)](eth2economics/code/beaconrunner/beacon_runner.ipynb)
+- [Beacon Runner 2049: Network partitions (Notebook)](eth2economics/code/beaconrunner2049/beacon_runner_2049.ipynb)
+  - ["It's only wafer-thin" -- Preventing state explosion with observers (Notebook)](eth2economics/code/beaconrunner2049/observers/observed-br2049.ipynb)
+- [Beacon Runner 2050: An agent-based model of eth2 (Notebook)](eth2economics/code/beaconrunner2050/br2050.ipynb)
 
 #### Also
 
-- [Exploring perfect world rewards [Notebook]](eth2economics/code/minisims/perfect_world.ipynb)
+- [Exploring perfect world rewards (Notebook)](eth2economics/code/minisims/perfect_world.ipynb)
 
 ## [eip1559](eip1559)
 
 Simulations and analysis of transaction fee markets.
 
-- [Easing into 1559 [Notebook]](eip1559/eip1559.ipynb)
+- [Easing into 1559 (Notebook)](eip1559/eip1559.ipynb)
   - [An ethresear.ch thread](https://ethresear.ch/t/eip-1559-simulations/7280)
 - [Combining EIP 1559 and the escalator algorithm](eip1559/combination.md)
+
+## [ethdata](ethdata)
+
+Data analysis and bias confirmations.
+
+- [Exploring blocks, gas and transactions](https://ethereum.github.io/rig/ethdata/notebooks/explore_data.html) + [source](ethdata/notebooks/explore_data.Rmd)
 
 ## Talks
 
