@@ -10,6 +10,7 @@ jupyterlab = "*"
 cadcad = "*"
 seaborn = "*"
 matplotlib = "*"
+numpy = "*"
 
 [requires]
 python_version = "3.8"
