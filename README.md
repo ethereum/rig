@@ -25,6 +25,9 @@ Simulations and analysis of transaction fee markets.
 
 - [Easing into 1559 (Notebook)](eip1559/eip1559.ipynb)
   - [An ethresear.ch thread](https://ethresear.ch/t/eip-1559-simulations/7280)
+
+#### Also
+
 - [Combining EIP 1559 and the escalator algorithm](eip1559/combination.md)
 
 ## [ethdata](ethdata)
