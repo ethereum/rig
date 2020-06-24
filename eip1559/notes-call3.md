@@ -2,6 +2,11 @@
 
 ## 1559 and the escalator
 
+I see two mutually exclusive paths:
+
+1. Keeping the current transaction model with the escalator rule for the fee.
+2. Adopting 1559 and then possibly adopting the escalator rule for the premium.
+
 If it is decided to combine 1559 and the escalator, I believe the [floating escalator](combination.md) is the best way to do so. It is the only option for which it is possible to unbundle the 1559 side and the escalator side, allowing us to implement 1559 first and decide later on (or in concert) whether the escalator rule should be proposed.
 
 As a reminder, the escalator rule governs the premium:
@@ -47,7 +52,7 @@ How should wallets set `max_fee` and `gas_premium`? We look for good default val
 
 Suppose a wallet offers defaults pegged to the basefee, e.g., three defaults $\rho_1 < \rho_2 < \rho_3$ such that proposed maxfees are $m_i = (1+\rho_i) b(t)$. Assuming users broadly follow wallet defaults (they seem to), miners now make a higher profit when basefee is higher, all else equal.
 
-It was suggested to default to a fixed premium for users, e.g., 1 Gwei, or the amount of Gwei that would exactly compensate a miner for the extra ommer risk of including the transaction in their block. The tip however will likely decide the speed of inclusion of the transaction, given that the tip is received by miners. We prefer high value or time-sensitive transactions to get in first and with a fixed premium, may not be able to discriminate between low and high value instances.
+It was suggested to default to a fixed premium for users, e.g., 1 Gwei, or the amount of Gwei that would exactly compensate a miner for the extra ommer risk of including the transaction in their block. The tip however will likely decide the speed of inclusion of the transaction, given that the tip is received by miners. We prefer high value or time-sensitive transactions to get in first and with a fixed premium, may not be able to discriminate between low and high value instances. The floating escalator can come in handy to help discriminate between the two.
 
 ### Pegged premium rule: A naive proposal that doesn't work
 
