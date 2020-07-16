@@ -1,5 +1,7 @@
 # Combination EIP1559 / escalator
 
+**TL;DR:** We present three models for combining EIP1559 and escalator. Of the three, only one really makes sense for us (the _floating escalator_ model), while the other two (_thresholded escalator_ and _fixed escalator_) are presented for the sake of providing a complete exploration of the design space.
+
 ## Base dynamics and parameters
 
 ### Base parameters
@@ -20,7 +22,9 @@
 
 - `p[t] = startpremium + (t - startblock) / (endblock - startblock) * (maxpremium - startpremium)`
 
-## Escalating gas price without basefee reference
+## Thresholded escalator
+
+**Intuition:** Vanilla escalator with the condition that a bid cannot be included if the `gasprice` is lower than the current `basefee`.
 
 ### User-specified parameters
 
@@ -47,13 +51,15 @@ assert gasprice[t] >= b[t]
 #### Pros
 
 - "Pure" escalator, only modulated by the presence of the basefee which determines inclusion or not.
-- Wallets can default to `startbid = b[t]`. This looks like the following "Fixed escalator started on basefee" model.
+- Wallets can default to `startbid = b[t]`. This is the _fixed escalator_ model.
 
 #### Cons
 
 - Cannot write EIP 1559 simple strategy basefee + fixed premium under that model.
 
-## Fixed escalator started on basefee
+## Fixed escalator
+
+**Intuition:** Vanilla escalator with a reasonable `startbid` parameter provided by the current `basefee`.
 
 ### User-specified parameters
 
@@ -96,7 +102,9 @@ _Bid in solid purple line, basefee in blue._
 - Gas price can raise faster than the escalator would plan, if basefee increases faster than the escalator slope. Should the premium follow? See "floating escalator started on basefee".
 - Cannot write EIP 1559 simple strategy basefee + fixed premium under that model.
 
-## Floating escalator started on basefee
+## Floating escalator
+
+**Intuition:** The "true" EIP 1559 with escalating tips. User specifies an escalator for the tip, which is added to the current basefee always, as opposed to the basefee at `startblock` for the fixed escalator. Users specifying a steeper escalator "take off" above other users, expressing their higher time preferences.
 
 ### User-specified parameters
 
