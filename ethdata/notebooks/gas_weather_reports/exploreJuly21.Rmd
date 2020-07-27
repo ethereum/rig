@@ -1,0 +1,249 @@
+---
+title: "Gas weather report: July 21st - July 27th"
+description: |
+  Do gas limit increases decrease gas prices?
+author:
+  - name: Barnabé Monnot 
+    url: https://twitter.com/barnabemonnot
+    affiliation: Robust Incentives Group, Ethereum Foundation
+    affiliation_url: https://github.com/ethereum/rig
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    toc: true
+    toc_depth: 3
+---
+
+The data includes all blocks produced between July 21st, 2020, 02:00:17 UTC and July 27th, 2020, 06:37:09 UTC. It was obtained from [Geth](https://geth.ethereum.org/) using a [DAppNode](https://dappnode.io) full node with the wonderful [ethereum-etl](https://github.com/blockchain-etl/ethereum-etl) package from Evgeny Medvedev to extract transaction and block details.
+
+<aside>
+You can check the source for this notebook [here (R notebook)](https://github.com/ethereum/rig/tree/master/ethdata/notebooks/gas_weather_reports/exploreJuly21.Rmd).
+</aside>
+
+```{r setup, message = FALSE}
+library(tidyverse)
+library(here)
+library(glue)
+library(lubridate)
+library(forecast)
+library(infer)
+library(matrixStats)
+library(rmarkdown)
+library(knitr)
+library(skimr)
+
+options(digits=10)
+options(scipen = 999) 
+
+# Make the plots a bit less pixellated
+knitr::opts_chunk$set(dpi = 300)
+
+# A minimal theme I like (zero bonus point for using it though!)
+newtheme <- theme_grey() + theme(
+  axis.text = element_text(size = 9),
+  axis.title = element_text(size = 12),
+  axis.line = element_line(colour = "#000000"),
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  panel.background = element_blank(),
+  legend.title = element_text(size = 12),
+  legend.text = element_text(size = 10),
+  legend.box.background = element_blank(),
+  legend.key = element_blank(),
+  strip.text.x = element_text(size = 10),
+  strip.background = element_rect(fill = "white")
+)
+theme_set(newtheme)
+```
+
+```{r}
+start_block <- 10500001
+end_block   <- 10540000
+suffix <- glue("-", start_block, "-", end_block)
+```
+
+```{r message = FALSE, eval=FALSE}
+txs <- read_csv(here::here(glue("data/txs", suffix, ".csv")))
+txs %>% glimpse()
+```
+
+```{r message=FALSE, eval=FALSE}
+txs_receipts <- txs %>%
+  left_join(
+    read_csv(here::here(glue("data/rxs", suffix, ".csv"))),
+    by = c("hash" = "transaction_hash")) %>%
+  arrange(block_number)
+saveRDS(txs_receipts, here::here(glue("data/txs", suffix, ".rds")))
+```
+
+```{r message=FALSE, cache=TRUE}
+txs_receipts <- readRDS(here::here(glue("data/txs", suffix, ".rds"))) %>%
+  mutate(gas_fee = gas_price * gas_used) %>%
+  mutate(gas_price = gas_price / (10 ^ 9),
+         gas_fee = gas_fee / (10 ^ 9),
+         value = value / (10 ^ 18))
+```
+
+```{r message=FALSE, cache=TRUE}
+blocks <- read_csv(here::here(glue("data/bxs", suffix, ".csv"))) %>%
+  mutate(block_date = as_datetime(timestamp),
+         prop_used = gas_used / gas_limit) %>%
+  rename(block_number = number) %>%
+  arrange(block_number)
+
+gas_prices_per_block <- blocks %>%
+  select(block_number) %>%
+  left_join(
+    txs_receipts %>%
+      group_by(block_number) %>%
+      summarise(
+        min_gas_price = min(gas_price),
+        total_gas_used = sum(gas_used),
+        avg_gas_price = sum(gas_fee) / total_gas_used,
+        med_gas_price = weightedMedian(gas_price, w = gas_used),
+        max_gas_price = max(gas_price)
+      )
+  ) %>%
+  select(-total_gas_used)
+
+blocks <- blocks %>%
+  left_join(gas_prices_per_block)
+```
+
+```{r message=FALSE, cache=TRUE}
+# To get all blocks
+date_sample <- interval(min(blocks$block_date), max(blocks$block_date))
+
+# To get a sample
+# date_sample <- interval(ymd("2020-05-13"), ymd("2020-05-20"))
+
+blocks_sample <- blocks %>%
+  filter(block_date %within% date_sample)
+
+txs_sample <- txs_receipts %>%
+  semi_join(blocks_sample)
+```
+
+## Block properties
+
+### Gas used by a block
+
+Miners have some control over the gas limit of a block, but how much gas do blocks generally use?
+
+```{r}
+blocks %>%
+  ggplot() +
+  geom_histogram(aes(x = gas_used), bins = 1000, fill = "steelblue") +
+  scale_y_log10() +
+  xlab("Gas used") +
+  ylab("Number of blocks")
+```
+
+The gas limit was increased from the previous limit of 10M gas, and gas used in blocks soon followed. We notice two peaks. Let's zoom in.
+
+```{r}
+blocks %>%
+  filter(gas_used >= 10.05 * 10^6) %>%
+  ggplot() +
+  geom_histogram(aes(x = gas_used), fill = "steelblue", bins = 60) +
+  xlab("Gas used") +
+  ylab("Number of blocks")
+```
+
+How did the gas limit evolve over time?
+
+```{r}
+blocks %>%
+  ggplot() +
+  geom_line(aes(x = block_date, y = gas_limit), color = "#FED152") +
+  xlab("Block date") +
+  ylab("Gas limit")
+```
+
+We have a shift in the middle of the week from about 12M gas limit to 12.5M. Did this release some pressure from transaction fees?
+
+## Gas prices
+
+### Distribution of gas prices
+
+First, some descriptive stats for the distribution of gas prices.
+
+```{r}
+quarts = c(0, 0.25, 0.5, 0.75, 1)
+tibble(
+  `Quartile` = quarts,
+) %>%
+  add_column(`Value` = quantile(txs_receipts$gas_price, quarts)) %>%
+  kable()
+```
+
+75% of included transactions post a gas price less than or equal to 90 Gwei. This is much higher than in our last [gas weather report in May](https://ethereum.github.io/rig/ethdata/notebooks/explore_data.html).
+
+### Evolution of gas prices
+
+To compute the average gas price in a block, I do a weighted mean using `gas_used` as weight. I then compute the average gas price over 100 blocks by doing another weighted mean using the total gas used in the blocks.
+
+```{r}
+chunk_size <- 100
+blocks_sample %>%
+  mutate(block_chunk = block_number %/% chunk_size) %>%
+  replace_na(list(
+    avg_gas_price = 0, gas_used = 0)) %>%
+  mutate(block_num = gas_used * avg_gas_price) %>%
+  group_by(block_chunk) %>%
+  summarise(avg_prop_used = mean(prop_used),
+            gas_used_chunk = sum(gas_used),
+            num_chunk = sum(block_num),
+            avg_gas_price = num_chunk / gas_used_chunk,
+            block_date = min(block_date)) %>%
+  ggplot() +
+  geom_line(aes(x = block_date, y = avg_gas_price), colour = "#F05431") +
+  xlab("Block timestamp") +
+  ylab("Average gas price")
+```
+
+We see a daily seasonality, with peaks and troughs corresponding to high congestion and low congestion hours of the day.
+
+Did increasing the gas limit reduce the prices overall? We can take a look visually.
+
+```{r}
+chunk_size <- 200
+blocks_sample %>%
+  mutate(block_chunk = block_number %/% chunk_size) %>%
+  replace_na(list(
+    avg_gas_price = 0, gas_used = 0)) %>%
+  mutate(block_num = gas_used * avg_gas_price) %>%
+  group_by(block_chunk) %>%
+  summarise(gas_limit_chunk = sum(gas_limit),
+            gas_used_chunk = sum(gas_used),
+            num_chunk = sum(block_num),
+            avg_gas_price = num_chunk / gas_used_chunk,
+            block_date = min(block_date),
+            prop_used = gas_used_chunk / gas_limit_chunk,
+            avg_gas_limit_chunk = mean(gas_limit),
+            avg_gas_used_chunk = mean(gas_used)) %>%
+  select(block_date, `Gas limit` = avg_gas_limit_chunk, `Average gas price` = avg_gas_price, `Gas used` = avg_gas_used_chunk) %>%
+  pivot_longer(-block_date, names_to = "Series") %>%
+  ggplot() +
+  geom_line(aes(x = block_date, y = value, color = Series)) +
+  scale_color_manual(values = c("#F05431", "#FED152", "steelblue")) +
+  facet_grid(rows = vars(Series), scales = "free") +
+  xlab("Block timestamp")
+```
+
+It doesn't seem like it did to me, even though the average gas used in blocks increased in concert with the gas limit. We can look at average prices for transactions in blocks with gas limit lesser than 12.25M gas ("small blocks") vs. blocks with gas limit greater than 12.25M ("big blocks").
+
+```{r cache=TRUE}
+big_blocks <- blocks %>%
+  mutate(big_block = if_else(gas_limit > 12.25 * 10^6, "Big block", "Small block")) %>%
+  replace_na(list(gas_used = 0, avg_gas_price = 0)) %>%
+  drop_na()
+```
+
+```{r fig.cap="Mean gas price in \"big\" and \"small\" blocks"}
+kable(big_blocks %>%
+  group_by(big_block) %>%
+  summarise(avg_gas_price = mean(avg_gas_price)))
+```
+
+The two averages are mighty close to each other, with big blocks posting even slightly higher gas prices than small one (a negligible difference however).
