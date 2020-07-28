@@ -17,7 +17,7 @@ output:
 The data includes all blocks produced between July 21st, 2020, 02:00:17 UTC and July 27th, 2020, 06:37:09 UTC. It was obtained from [Geth](https://geth.ethereum.org/) using a [DAppNode](https://dappnode.io) full node with the wonderful [ethereum-etl](https://github.com/blockchain-etl/ethereum-etl) package from Evgeny Medvedev to extract transaction and block details.
 
 <aside>
-You can check the source for this notebook [here (R notebook)](https://github.com/ethereum/rig/tree/master/ethdata/notebooks/gas_weather_reports/exploreJuly21.Rmd).
+You can check the source for this notebook [here (R notebook)](https://github.com/ethereum/rig/tree/master/ethdata/notebooks/gas_weather_reports/exploreJuly21.Rmd). See a previous report [here](https://ethereum.github.io/rig/ethdata/notebooks/explore_data.html).
 </aside>
 
 ```{r setup, message = FALSE}
@@ -246,4 +246,8 @@ kable(big_blocks %>%
   summarise(avg_gas_price = mean(avg_gas_price)))
 ```
 
-The two averages are mighty close to each other, with big blocks posting even slightly higher gas prices than small one (a negligible difference however).
+The two averages are mighty close to each other, with big blocks posting even slightly higher gas prices than small ones (a negligible difference however).
+
+<aside>
+**Addendum:** Vitalik performed a thorough analysis two years ago looking at [demand elasticity to the block size (on ethresear.ch)](https://ethresear.ch/t/estimating-cryptocurrency-transaction-demand-elasticity-from-natural-experiments/2330). You can also check [his tweet](https://twitter.com/VitalikButerin/status/1288082095051546624) mentioning elasticity close to 1. With gas limit upped from 12M to 12.5M (a mere 4% increase), the result we observe here is not suprising.
+</aside>
