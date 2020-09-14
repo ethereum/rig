@@ -25,10 +25,11 @@ Ongoing effort to produce an incentives-focused testing environment for the beac
 
 Simulations and analysis of transaction fee markets.
 
+**==> [New standalone repo](https://github.com/barnabemonnot/abm1559) <==**
+
 - [Easing into 1559 (Notebook)](eip1559/eip1559.ipynb)
   - [An ethresear.ch thread](https://ethresear.ch/t/eip-1559-simulations/7280)
 - [Implementers call #3 notes](eip1559/notes-call3.md)
-- [Agent-based model of EIP 1559](eip1559/abm1559.ipynb)
 
 #### Also
 
@@ -39,6 +40,7 @@ Simulations and analysis of transaction fee markets.
 Data analysis and bias confirmations.
 
 - [Exploring blocks, gas and transactions](https://ethereum.github.io/rig/ethdata/notebooks/explore_data.html) + [source](ethdata/notebooks/explore_data.Rmd)
+- [Gas weather report, July 21st-July 27th](https://ethereum.github.io/rig/ethdata/notebooks/gas_weather_reports/exploreJuly21.html) + [source](ethdata/notebooks/gas_weather_reports/exploreJuly21.Rmd)
 
 ## Talks
 
@@ -46,5 +48,7 @@ Meet the RIG and check our previous talks!
 
 | Talk | Location | Date | Link |
 |---|---|---|---|
+| cadCAD community call #2 | Online | 28 August 2020 | [Video](https://www.youtube.com/watch?v=SVNNvTiIKlg) + [Slides](https://docs.google.com/presentation/d/13PHT4fIw7g_fhOfkagZRyxjeVO8dM3z6zjRMQkY0j1U/edit?usp=sharing) |
+| Eth Magicians EIP 1559 panel | Online | 29 July 2020 | [Video](https://www.youtube.com/watch?v=kNSpugOwQ1o) |
 | EthCC[3] | Paris (remote from Singapore) | 3 March 2020 | [Slides](assets/pdf/rig-ethcc.pdf) |
 | OpenSUTD Blockchain development IAP | SUTD | 16 January 2020 | [Slides](https://docs.google.com/presentation/d/10LR57HTiSs-8pBpNeXKoJ13zOPxzOrLI8Avs3FSDsz0/edit?usp=sharing) |
