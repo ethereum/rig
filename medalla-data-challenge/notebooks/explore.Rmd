@@ -1,0 +1,855 @@
+---
+title: "Exploring Medalla data"
+author:
+- name: Barnabé Monnot
+  url: https://twitter.com/barnabemonnot
+  affiliation: Robust Incentives Group, Ethereum Foundation
+  affiliation_url: https://github.com/ethereum/rig
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    toc: yes
+    toc_depth: 3
+  html_document:
+    toc: yes
+    toc_depth: '3'
+    df_print: paged
+description: |
+  Initial exploration.
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(glue)
+library(RPostgres)
+library(DBI)
+library(ineq)
+library(PKI)
+library(rmarkdown)
+library(zoo)
+
+source(here::here("notebooks/lib.R"))
+
+con <- dbConnect(RPostgres::Postgres(), user="chain", password=pw)
+
+options(digits=10)
+options(scipen = 999) 
+
+# Make the plots a bit less pixellated
+knitr::opts_chunk$set(dpi = 300)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+
+# A minimal theme I like
+newtheme <- theme_grey() + theme(
+  axis.text = element_text(size = 9),
+  axis.title = element_text(size = 12),
+  axis.line = element_line(colour = "#000000"),
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  panel.background = element_blank(),
+  legend.title = element_text(size = 12),
+  legend.text = element_text(size = 10),
+  legend.box.background = element_blank(),
+  legend.key = element_blank(),
+  strip.text.x = element_text(size = 10),
+  strip.background = element_rect(fill = "white")
+)
+theme_set(newtheme)
+
+myred <- "#F05431"
+myyellow <- "#FED152"
+mygreen <- "#BFCE80"
+```
+
+```{r}
+batch_ops <- function(df, fn, batch_size = 1e4) {
+  batches <- nrow(df) %/% batch_size
+  (0:batches) %>%
+    map(
+      function(batch) df %>%
+        filter(row_number() >= batch * batch_size, row_number() < (batch + 1) * batch_size) %>%
+        fn()
+      ) %>%
+    bind_rows() %>%
+    return()
+}
+```
+
+```{r}
+slots_per_epoch <- 32
+until_epoch <- 25 * 30 # recommended to use multiples of 25
+until_slot <- until_epoch * slots_per_epoch
+slots_per_year <- 365.25 * 24 * 60 * 60 / 12
+epochs_per_year <- slots_per_year / slots_per_epoch
+start_suffix <- 1
+end_suffix <- 281
+epoch_resolution <- 10
+datadir <- "data"
+slot_chunk_res <- 100
+```
+
+```{r cache=TRUE}
+all_bxs <- (start_suffix:end_suffix) %>%
+  map(function(i) read_csv(here::here(glue(datadir, "/blocks_", i, ".csv"))) %>%
+        filter(slot <= until_slot) %>%
+        mutate(
+          block_root = str_trunc(block_root, 10, "left", ellipsis = ""),
+          parent_root = str_trunc(parent_root, 10, "left", ellipsis = ""),
+          state_root = str_trunc(state_root, 10, "left", ellipsis = "") 
+        )) %>%
+  bind_rows()
+```
+
+```{r cache=TRUE}
+all_ats <- (start_suffix:end_suffix) %>%
+  map(function(i) read_csv(here::here(glue(datadir, "/attestations_", i, ".csv"))) %>%
+        filter(slot <= until_slot) %>%
+        mutate(beacon_block_root = str_trunc(beacon_block_root, 10, "left", ellipsis = ""),
+               source_block_root = str_trunc(source_block_root, 10, "left", ellipsis = ""),
+               target_block_root = str_trunc(target_block_root, 10, "left", ellipsis = ""))) %>%
+  bind_rows()
+```
+
+```{r cache=TRUE}
+capture_validators <- function(df) {
+  df %>%
+    rowwise() %>%
+    mutate(pubkey = str_c(c("0x", raw2hex(f_public_key)), collapse="")) %>%
+    ungroup() %>%
+    select(pubkey, validator_index = f_index, activation_epoch = f_activation_epoch) %>%
+    mutate(validator_index = as.numeric(validator_index),
+           activation_epoch = as.numeric(activation_epoch),
+           time_active = until_epoch - activation_epoch)
+}
+
+res <- dbSendQuery(con, "SELECT * FROM t_validators")
+all_vs <- dbFetch(res, n = 1000) %>% capture_validators()
+while(!dbHasCompleted(res)){
+  all_vs <- all_vs %>%
+    bind_rows(dbFetch(res, n = 1000) %>% capture_validators())
+}
+```
+
+```{r cache=TRUE}
+all_dps <- (start_suffix:end_suffix) %>%
+  map(function(i) read_csv(here::here(glue(datadir, "/deposits_", i, ".csv"))) %>%
+        filter(slot <= until_slot) %>%
+        left_join(
+          all_vs,
+          by = c("pubkey" = "pubkey")
+        ) %>%
+        select(validator_index, deposit_slot = slot, amount)
+  ) %>%
+  bind_rows() %>%
+  ungroup()
+```
+
+```{r cache=TRUE}
+capture_committee <- function(df) {
+  df %>%
+    pull(f_committee) %>%
+    str_remove_all("\\{|\\}") %>%
+    str_split(",") %>%
+    plyr::ldply(rbind) %>%
+    add_column(slot = df$f_slot) %>%
+    mutate(committee_index = row_number() - 1) %>%
+    pivot_longer(matches("[0-9]+"), names_to = "index_in_committee", values_to = "validator_index") %>%
+    mutate(index_in_committee = strtoi(index_in_committee) - 1,
+           validator_index = strtoi(validator_index),
+           slot = as.numeric(slot),
+           epoch = slot %/% slots_per_epoch) %>%
+    rename(att_slot = slot) %>%
+    group_by(epoch, att_slot) %>%
+    mutate(committee_index = committee_index - min(committee_index)) %>%
+    filter(!is.na(validator_index)) %>%
+    ungroup()
+}
+
+res <- dbSendQuery(con, glue("SELECT * FROM t_beacon_committees WHERE f_slot <= ", until_slot))
+all_cms <- dbFetch(res, n = 1000) %>% capture_committee()
+while(!dbHasCompleted(res)){
+  all_cms <- all_cms %>%
+    bind_rows(dbFetch(res, n = 1000) %>% capture_committee())
+}
+```
+
+```{r cache=TRUE}
+capture_balances <- function(df) {
+  df %>%
+    select(epoch = f_epoch, validator_index = f_validator_index,
+           balance = f_balance, effective_balance = f_effective_balance) %>%
+    mutate_all(as.numeric)
+}
+
+res <- dbSendQuery(con, glue("SELECT * FROM t_validator_balances WHERE f_epoch <= ", until_slot %/% slots_per_epoch, " AND f_epoch % ", epoch_resolution, "= 0"))
+val_balances <- dbFetch(res, n = 1000) %>% capture_balances()
+while(!dbHasCompleted(res)){
+  val_balances <- val_balances %>%
+    bind_rows(dbFetch(res, n = 1000) %>% capture_balances())
+}
+```
+
+```{r cache=TRUE, cache.lazy = FALSE}
+logical_ats <- batch_ops(
+  all_ats,
+  function(df) df$attesting_indices %>%
+    str_extract_all("[01]") %>%
+    map(strtoi) %>%
+    map(as.logical) %>%
+    plyr::ldply(rbind) %>%
+    add_column(
+      slot = df$slot,
+      att_slot = df$att_slot,
+      committee_index = df$committee_index,
+      beacon_block_root = df$beacon_block_root,
+      source_block_root = df$source_block_root,
+      target_block_root = df$target_block_root, .before = "1")
+) %>%
+  arrange(att_slot, committee_index, slot)
+
+exploded_ats <- batch_ops(
+  logical_ats,
+  function(df) df %>%
+    pivot_longer(matches("[0-9]+"), names_to = "index_in_committee") %>%
+    drop_na() %>%
+    filter(value) %>%
+    select(-value) %>%
+    mutate(index_in_committee = strtoi(index_in_committee) - 1)
+) %>%
+  arrange(att_slot, committee_index, index_in_committee, slot)
+
+individual_ats <- exploded_ats %>%
+  select(-slot) %>%
+  distinct()
+```
+
+In this notebook we explore data from the [Medalla testnet](https://ethereum.org/en/eth2/get-involved/medalla-data-challenge/). We are looking at the `r (max(all_bxs$slot) + 1)` first slots.
+
+## Data sources
+
+### Lighthouse block export
+
+We use a fork of [Lakshman Sankar](https://twitter.com/lakshmansankar)'s [Lighthouse block exporter](https://github.com/barnabemonnot/lighthouse_block_export) to export attestations and blocks from the finalised chain until slot `r until_slot`.
+
+We present the main datasets below:
+
+#### `logical_ats`
+
+Each row in this dataset corresponds to an aggregate attestation included in a block. We cast its `attesting_indices` (the bits recording which validators are aggregated in this aggregate attestation) to a wide format, with one column per validator. This is shown below (columns past column "3" are truncated).
+
+```{r, layout="l-body-outset"}
+logical_ats %>%
+  select(!num_range("", 4:1000)) %>%
+  head() %>%
+  paged_table()
+```
+
+#### `exploded_ats`
+
+We cast the dataset above into a long format, such that each row corresponds to an individual attestation included in a block. Note that when this individual attestation is included multiple times over multiple aggregates, it appears multiple times in the dataset.
+
+```{r, layout="l-body-outset"}
+exploded_ats %>%
+  head() %>%
+  paged_table()
+```
+
+#### `all_dps`
+
+Validators are allowed to deposit more ETH into their eth2 accounts. Later on, we compute the reward obtained by a validator by comparing its initial balance with its current balance. We must then deduct deposits that were made since genesis.
+
+```{r}
+all_dps %>%
+  head() %>%
+  paged_table()
+```
+
+<aside>
+The validator index is not included in the `Deposit` object recorded on the beacon chain. We use data from the Weald dump, presented below, to recover the validator index from its public key.
+</aside>
+
+### Weald dump
+
+[Jim McDonald](https://twitter.com/AttestantIO), from Attestant, kindly provided a treasure trove of data on the #medalla-data-challenge channel of the EthStaker Discord server. The two previous datasets could have legitimately been mined from Jim's data, but we like to get our hands dirty.
+
+#### `all_cms`
+
+Not too dirty though: obtaining the past record of committees (which validators are supposed to attend when) is much more computationally intensive, since it requires access to past states. This dataset is a long-format record of which validators appear in which committee and when.
+
+<aside>
+Note that you can obtain past states from the [Lighthouse block exporter](https://github.com/barnabemonnot/lighthouse_block_export) too, but still need to compute the committees from them.
+</aside>
+
+```{r, layout="l-body-outset"}
+all_cms %>%
+  head() %>%
+  paged_table()
+```
+
+#### `val_balances`
+
+The final dataset gives us validator state balances at the end of each epoch. Note that the state balance, the true ETH amount a validator owns, is different from effective balances, which measure the principal on which validators receive an interest.
+
+```{r, layout="l-body-outset"}
+val_balances %>%
+  head() %>%
+  paged_table()
+```
+
+<!-- ### Which attestations vote for sources, targets or chain head outside of the known blocks? -->
+
+<!-- ```{r} -->
+<!-- correct_ats <- all_ats %>% -->
+<!--   inner_join(all_bxs %>% select(block_root), by = c("source_block_root" = "block_root")) %>% # same number as `all_ats` -->
+<!--   inner_join(all_bxs %>% select(block_root), by = c("target_block_root" = "block_root")) # smaller than `all_ats` -->
+<!-- ``` -->
+
+## Performance of duties
+
+### Attester duties
+
+We compare the number of included attestations with the number of expected attestations.
+
+```{r}
+all_cms %>%
+  group_by(att_slot) %>%
+  summarise(expected = n()) %>%
+  left_join(
+    individual_ats %>%
+      group_by(att_slot) %>%
+      summarise(received = n())
+  ) %>%
+  replace_na(list(received = 0)) %>%
+  mutate(slot_chunk = att_slot %/% slot_chunk_res) %>%
+  filter(slot_chunk != max(slot_chunk)) %>%
+  group_by(slot_chunk) %>%
+  summarise(percent_received = sum(received) / sum(expected) * 100) %>%
+  ggplot() +
+  geom_line(aes(x = slot_chunk * slot_chunk_res %/% slots_per_epoch, y = percent_received), colour = myred) +
+  xlab("Epoch") +
+  ylab("Percent attested and included") +
+  ylim(0, 100)
+```
+
+### Proposer duties
+
+How many blocks are there in the canonical chain?
+
+```{r}
+tibble(slot = 0:until_slot) %>%
+  left_join(all_bxs %>%
+              select(slot) %>%
+              mutate(proposed = 1),
+            by = c("slot" = "slot")) %>%
+  replace_na(list(proposed = 0)) %>%
+  mutate(slot_chunk = slot %/% slot_chunk_res) %>%
+  filter(slot_chunk != max(slot_chunk)) %>%
+  group_by(slot_chunk) %>%
+  summarise(percent_proposed = sum(proposed) / n() * 100) %>%
+  ggplot() +
+  geom_line(aes(x = slot_chunk * slot_chunk_res %/% slots_per_epoch, y = percent_proposed), colour = myred) +
+  xlab("Epoch") +
+  ylab("Percent proposed and included") +
+  ylim(0, 100)
+```
+
+## Correctness of attestations
+
+```{r}
+block_root_at_slot <- tibble(
+  slot = 0:until_slot
+) %>%
+  left_join(
+    all_bxs %>% select(slot, block_root),
+    by = c("slot" = "slot")
+  ) %>%
+  mutate(block_root = .$block_root %>% na.locf())
+```
+
+### Target checkpoint
+
+```{r}
+correct_target_ats <- individual_ats %>%
+  mutate(epoch = att_slot %/% slots_per_epoch,
+         epoch_slot = epoch * slots_per_epoch) %>%
+  inner_join(
+    block_root_at_slot,
+    by = c("epoch_slot" = "slot")
+  ) %>%
+  filter(target_block_root == block_root)
+```
+
+```{r}
+n_individual_ats <- individual_ats %>% nrow()
+n_correct_target_ats <- correct_target_ats %>% nrow()
+
+tibble(
+  Name = c("Individual attestations", "Correct target attestations", "Percent correct"),
+  Value = c(n_individual_ats, n_correct_target_ats, round(n_correct_target_ats / n_individual_ats * 100, digits = 2)
+  )
+) %>%
+  paged_table()
+```
+How does the correctness evolve over time?
+
+```{r}
+individual_ats %>%
+  left_join(
+    correct_target_ats %>%
+      select(-block_root) %>%
+      mutate(correct = 1),
+    by = c("att_slot" = "att_slot", "committee_index" = "committee_index", "index_in_committee" = "index_in_committee",
+           "beacon_block_root" = "beacon_block_root", "source_block_root" = "source_block_root",
+           "target_block_root" = "target_block_root")
+  ) %>%
+  replace_na(list(correct = 0)) %>%
+  mutate(slot_chunk = att_slot %/% slot_chunk_res) %>%
+  group_by(slot_chunk) %>%
+  summarise(percent_correct = sum(correct) / n() * 100) %>%
+  ggplot() +
+  geom_col(aes(x = slot_chunk * slot_chunk_res, y = percent_correct), fill = mygreen) +
+  xlab("Epoch") +
+  ylab("Percent correct targets")
+```
+
+### Head of the chain
+
+```{r}
+correct_head_ats <- individual_ats %>%
+  inner_join(
+    block_root_at_slot,
+    by = c("att_slot" = "slot")
+  ) %>%
+  filter(beacon_block_root == block_root)
+```
+
+Which percentage of attestations correctly attest to the head of the chain?
+
+```{r}
+n_individual_ats <- individual_ats %>% nrow()
+n_correct_head_ats <- correct_head_ats %>% nrow()
+
+tibble(
+  Name = c("Individual attestations", "Correct head attestations", "Percent correct"),
+  Value = c(n_individual_ats, n_correct_head_ats, round(n_correct_head_ats / n_individual_ats * 100, digits = 2)
+  )
+) %>%
+  paged_table()
+```
+How does the correctness evolve over time?
+
+```{r}
+individual_ats %>%
+  left_join(
+    correct_head_ats %>%
+      select(-block_root) %>%
+      mutate(correct = 1),
+    by = c("att_slot" = "att_slot", "committee_index" = "committee_index", "index_in_committee" = "index_in_committee",
+           "beacon_block_root" = "beacon_block_root", "source_block_root" = "source_block_root",
+           "target_block_root" = "target_block_root")
+  ) %>%
+  replace_na(list(correct = 0)) %>%
+  mutate(slot_chunk = att_slot %/% slot_chunk_res) %>%
+  group_by(slot_chunk) %>%
+  summarise(percent_correct = sum(correct) / n() * 100) %>%
+  ggplot() +
+  geom_col(aes(x = slot_chunk * slot_chunk_res %/% slots_per_epoch, y = percent_correct), fill = "purple") +
+  xlab("Epoch") +
+  ylab("Percent correct head")
+```
+
+### Justification and finalisation
+
+```{r}
+all_cms %>%
+  left_join(
+    correct_target_ats %>%
+      distinct() %>%
+      select(att_slot, committee_index, index_in_committee) %>%
+      mutate(voted = 1),
+    by = c("att_slot" = "att_slot", "committee_index" = "committee_index", "index_in_committee" = "index_in_committee")
+  ) %>%
+  replace_na(list(voted = 0)) %>%
+  inner_join(val_balances,
+             by = c("epoch" = "epoch", "validator_index" = "validator_index")) %>%
+  mutate(effective_balance = effective_balance / (1e9)) %>%
+  group_by(epoch) %>%
+  summarise(attested_stake = sum(voted * effective_balance),
+            total_stake = sum(effective_balance),
+            percent_attested = sum(voted * balance) / sum(balance))
+```
+```{r}
+correct_target_ats %>%
+  inner_join(all_cms) %>%
+  group_by(epoch) %>%
+  summarise(n = n_distinct(target_block_root)) %>%
+  arrange(desc(n))
+```
+
+
+## Validator performance
+
+Validators are rewarded for their performance, and penalised for failing to complete their tasks. We start with a crude measure of performance: the number of included attestations. It is a crude measure since (a) we do not discount the timeliness of the validator, measured by the inclusion delay and (b) we do not check that the attestation's attributes are correct (with the exception of the `source` attribute, since an incorrect source cannot possibly be included on-chain).
+
+### Uptime-rewards curve I: Included attestations
+
+We compare the percentage of included attestations with the (possibly negative) reward obtained by the validator.
+
+```{r}
+bxs_proposed_per_val <- all_vs %>%
+  select(validator_index) %>%
+  left_join(
+    all_bxs %>%
+      group_by(proposer_index) %>%
+      summarise(blocks_proposed = n()),
+    by = c("validator_index" = "proposer_index")
+  ) %>%
+  replace_na(list(blocks_proposed = 0))
+```
+
+```{r}
+included_atts_per_val <- all_cms %>%
+  left_join(
+    exploded_ats %>%
+      select(att_slot, committee_index, index_in_committee) %>%
+      mutate(included = 1) %>%
+      distinct(),
+    by = c("att_slot" = "att_slot", "committee_index" = "committee_index", "index_in_committee" = "index_in_committee")
+  ) %>%
+  replace_na(list(included = 0)) %>%
+  group_by(validator_index) %>%
+  summarise(included_atts = sum(included))
+```
+
+```{r}
+rewards_per_val <- included_atts_per_val %>%
+  inner_join(bxs_proposed_per_val) %>%
+  inner_join(all_vs %>% select(validator_index, time_active)) %>%
+  left_join(
+    all_dps %>%
+      inner_join(all_vs %>% select(validator_index, activation_epoch)) %>%
+      group_by(validator_index) %>%
+      filter(activation_epoch == 0 | deposit_slot != min(deposit_slot)) %>%
+      summarise(extra_balance = sum(amount)),
+    by = c("validator_index" = "validator_index")
+  ) %>%
+  replace_na(list(extra_balance = 0)) %>%
+  inner_join(
+    val_balances,
+    by = c("validator_index" = "validator_index")
+  ) %>%
+  filter(epoch >= until_epoch - time_active, time_active > epoch_resolution) %>%
+  group_by(validator_index) %>%
+  filter(epoch == max(epoch) | epoch == min(epoch)) %>%
+  arrange(epoch) %>%
+  mutate(
+    balance_diff = (balance - dplyr::lag(balance) - extra_balance) / balance * 100 *
+      epochs_per_year / time_active
+  ) %>%
+  filter(epoch == until_epoch)
+```
+
+```{r}
+rewards_per_val %>%
+  filter(balance_diff > -20,
+         balance_diff < mean(rewards_per_val$balance_diff, na.rm = TRUE) + 1.5 * sd(rewards_per_val$balance_diff, na.rm = TRUE)) %>%
+  mutate(percent_attested = included_atts / (time_active + 1) * 100) %>%
+  ggplot() +
+  geom_point(aes(x = percent_attested, y = balance_diff), alpha = 0.2, colour = myred) +
+  geom_hline(yintercept = 0, colour = "steelblue", linetype = "dashed") +
+  xlab("Percent of epochs attested") +
+  ylab("Annualised reward (%)")
+```
+
+<aside>
+Note that we restrict the dataset to validators who have not proposed a block yet.
+</aside>
+
+We plot the same with different colours denoting the number of proposed blocks by each validator.
+
+```{r}
+uptime_rewards <- rewards_per_val %>%
+  filter(balance_diff > -20,
+         balance_diff < mean(rewards_per_val$balance_diff, na.rm = TRUE) + 1.5 * sd(rewards_per_val$balance_diff, na.rm = TRUE)) %>%
+  mutate(percent_attested = included_atts / (time_active + 1) * 100) %>%
+  left_join(
+    correct_head_ats %>%
+      left_join(all_cms) %>%
+      group_by(validator_index) %>%
+      summarise(percent_correct = n() / (max(epoch) + 1) * 100),
+    by = c("validator_index" = "validator_index")
+  ) %>%
+  replace_na(list(percent_correct = 0)) %>%
+  mutate(correct = if_else(percent_correct < 40, "Less than 50%", "More than 50%"))
+uptime_rewards$blocks_proposed <- as_factor(uptime_rewards$blocks_proposed)
+
+uptime_rewards %>%
+  ggplot() +
+  geom_point(aes(x = percent_attested, y = balance_diff, group = blocks_proposed, colour = blocks_proposed), alpha = 0.3) +
+  geom_hline(yintercept = 0, colour = "steelblue", linetype = "dashed") +
+  # scale_color_manual(name = "Head correct", values = c(myred, mygreen)) +
+  # facet_wrap(vars(blocks_proposed), ncol = 2) +
+  xlab("Percent of epochs attested") +
+  ylab("Annualised reward (%)")
+```
+<aside>
+We only show return rates within two standard deviations of the mean. Very low reward rates are incurred by slashed validators, or very high rates by slashing validators.
+</aside>
+
+### Uptime-rewards curve II: Inclusion delay
+
+We turn our attention to the inclusion delay. Validators are rewarded for attesting timely, with higher rewards the earlier they are included in a block. We explode aggregates contained in the blocks to trace the earliest included attestation of each validator in an epoch.
+
+```{r}
+inclusion_delay_per_att <- exploded_ats %>%
+  group_by(beacon_block_root, source_block_root, target_block_root, att_slot, index_in_committee, committee_index) %>%
+  summarise(min_inclusion_slot = min(slot)) %>%
+  mutate(inclusion_delay = min_inclusion_slot - att_slot) %>%
+  ungroup()
+```
+
+```{r}
+inclusion_delay_per_att %>%
+  group_by(inclusion_delay) %>%
+  summarise(n = n()) %>%
+  ggplot() +
+  geom_col(aes(x = inclusion_delay, y = n), fill="steelblue") +
+  scale_y_log10() +
+  xlab("Inclusion delay") +
+  ylab("Count (log10)")
+```
+
+Note that the y axis is given on a logarithmic scale. A high number of attestations have a low inclusion delay, which is good! Since attestations cannot be included more than 32 slots from their attesting slot, the distribution above is naturally capped at 32.
+
+How is the inclusion delay correlated with the rewards? We look at validators who have the highest number of included attestations to find out.
+
+```{r}
+inclusion_delay_per_val <- inclusion_delay_per_att %>%
+  inner_join(
+    all_cms
+  ) %>%
+  group_by(validator_index) %>%
+  summarise(avg_delay = mean(inclusion_delay))
+```
+
+```{r}
+inclusion_delay_per_val %>%
+  inner_join(rewards_per_val) %>%
+  ungroup() %>%
+  mutate(test = mean(.$balance_diff) + 2 * sd(.$balance_diff)) %>%
+  filter(included_atts > 0.8 * max(included_atts)) %>%
+  ggplot() +
+  geom_point(aes(x = avg_delay, y = balance_diff), alpha = 0.2, colour = myred) +
+  geom_hline(yintercept = 0, colour = "steelblue", linetype = "dashed") +
+  xlab("Average inclusion delay") +
+  ylab("Annualised reward (%)")
+```
+
+We see a slight negative relationship, with higher average inclusion delay yielding lower reward rates.
+
+## Aggregate attestations
+
+eth2 is built to scale to tens of thousands of validators. This introduces overhead from message passing (and inclusion) when these validators are asked to vote on the canonical chain. To alleviate the beacon chain, votes (a.k.a. **attestations**) can be **aggregated**.
+
+In particular, an attestation contains four attributes:
+
+- The slot it is attesting for.
+- Its vote for the head of the beacon chain, given by the fork choice rule.
+- Its vote for the source, i.e., the last justified checkpoint in its view.
+- Its vote for the target, i.e., the checkpoint to be justified in its view.
+
+Since we expect validators to broadly agree in times of low latency, we also expect a lot of redundant attestations. We can aggregate such a set of attestations $I$ into a single, aggregate, attestation.
+
+For each slot $s$, a committee of validator $C(s)$ is determined who is expected to attest for $s$. Assume that two aggregate attestations were formed from validators attesting for $s$, one aggregate of validators in set $I \subseteq C(s)$ and the other with validators in set $J \subseteq C(s)$. We have two cases:
+
+- When the intersection of $I$ and $J$ is non-empty, we cannot aggregate the two aggregates further.
+- When the intersection of $I$ and $J$ is empty, the two aggregates can themselves be aggregated, into one containing attestations from validator set $I \cup J$.
+
+In the following, we look at redundant, clashing and individual attestations.
+
+### How many individual attestations are contained in aggregates?
+
+```{r message=FALSE}
+all_ats %>%
+  mutate(agg_sum = str_count(attesting_indices, "1")) %>%
+  group_by(agg_sum) %>%
+  summarise(n = n()) %>%
+  mutate(cs = cumsum(n)) %>%
+  ggplot() +
+  geom_col(aes(x = agg_sum, y = n), fill=myred) +
+  xlab("Number of attestations in aggregate") +
+  ylab("Count")
+```
+A fairly high number of aggregate attestations included in a block are actually individual attestations. Nonetheless, a significant number of aggregates tally up between 50 and 100 attestations.
+
+We can plot the same, weighing by the size of the validator set in the aggregate, to count how many individual attestations each size of aggregates included.
+
+```{r}
+all_ats %>%
+  mutate(agg_sum = str_count(attesting_indices, "1")) %>%
+  group_by(agg_sum) %>%
+  summarise(n = n()) %>%
+  mutate(cs = cumsum(n),
+         total_ind = agg_sum * n) %>%
+  ggplot() +
+  geom_col(aes(x = agg_sum, y = total_ind), fill=myred) +
+  xlab("Number of attestations in aggregate") +
+  ylab("Number of individual attestations")
+```
+Overall, we can plot the [Lorenz curve](https://en.wikipedia.org/wiki/Lorenz_curve) of aggregate attestations. This allows us to find out the share of attestations held by the 20% largest aggregates.
+
+```{r}
+L <- all_ats %>%
+  mutate(agg_size = str_count(attesting_indices, "1")) %>%
+  pull(agg_size) %>%
+  Lc()
+```
+
+```{r}
+L_tibble <- tibble(p = L$p, L = L$L)
+
+L_80q <- quantile(L$L, 0.8, names=FALSE) %>%
+  round(digits = 2)
+
+L_tibble %>%
+  ggplot() +
+  geom_line(aes(x = p, y = L), colour = myred, size = 1.1) +
+  geom_abline(slope = 1, intercept = 0, linetype="dotted") +
+  geom_vline(xintercept = 0.8, colour = "steelblue", linetype = "dotted", size = 1.1) +
+  geom_hline(yintercept = L_80q, colour = "steelblue", size = 1.1) +
+  scale_x_continuous(
+    breaks = sort(c(c(0.8), with(L_tibble, pretty(range(p))))),
+  ) +
+  scale_y_continuous(
+    breaks = sort(c(c(L_80q), with(L_tibble, pretty(range(p))))),
+  ) +
+  xlab("Aggregation percentile") +
+  ylab("Cumulative share of attestations")
+```
+The answer is `r (100 - L_80q * 100)`%.
+
+#### How much savings did aggregates provide?
+
+We compare how many individual attestations exist to how many aggregates were included.
+
+How many distinct individual attestations are there?
+
+```{r}
+n_individual_ats <- exploded_ats %>%
+  select(-slot) %>%
+  distinct() %>%
+  summarise(Count = n()) %>%
+  pull(Count)
+n_aggregates <- logical_ats %>%
+  summarise(Count = n()) %>%
+  pull(Count)
+tibble(Name = c("Individual attestations", "Included aggregates", "Savings ratio"),
+       Value = c(n_individual_ats, n_aggregates, n_individual_ats / n_aggregates)) %>%
+  paged_table()
+```
+
+We have `r round(n_individual_ats / n_aggregates, digits = 2)` times more individual attestations than aggregates, meaning that if we were not aggregating, we would have `r round(n_individual_ats / n_aggregates, digits = 2)` as much data on-chain.
+
+### In how many aggregate attestations is a single attestation included?
+
+We look at all _individual_ attestations in our dataset, i.e., individual, unaggregated votes, and measure how many times they were included in an aggregate.
+
+```{r}
+exploded_ats %>%
+  group_by(beacon_block_root, source_block_root, target_block_root, att_slot, committee_index, index_in_committee) %>%
+  summarise(n = n()) %>%
+  group_by(n) %>%
+  summarise(count = n()) %>%
+  mutate(cs = cumsum(count)) %>%
+  ggplot() +
+  geom_col(aes(x = n, y = count), fill=myred) +
+  xlab("Number of times included in an aggregate") +
+  ylab("Count")
+```
+
+### How many redundant aggregate attestations are there?
+
+We call **redundant** identical aggregate attestations (same four attributes and same set of validator indices) which are included in more than one block. It can happen when a block producer does not see that an aggregate was previously included (e.g., because of latency), or simply when the block producer doesn't pay attention and greedily adds as many aggregates as they know about.
+
+```{r}
+logical_ats %>%
+  group_by(att_slot, committee_index, beacon_block_root, source_block_root, target_block_root) %>%
+  summarise(n = n()) %>%
+  group_by(n) %>%
+  summarise(count = n()) %>%
+  ggplot() +
+  geom_col(aes(x = n, y = count), fill=myred) +
+  xlab("Number of times redundant") +
+  ylab("Count")
+```
+
+The mode is 1, which is also the optimal case. A redundant aggregate does not have much purpose apart from bloating the chain.
+
+### How many times did a block include the exact same aggregate attestation more than once?
+
+We could call these **strongly redundant**, as this is pure waste.
+
+```{r}
+strong_redundant <- logical_ats %>%
+  group_by_all() %>%
+  summarise(`Appearances` = n()) %>%
+  group_by(`Appearances`) %>%
+  summarise(`Count` = n())
+n_strong_redundant_twice <- strong_redundant %>%
+  pull(Count) %>%
+  pluck(2)
+n_strong_redundant_over_twice <- strong_redundant %>%
+  pull(Count) %>%
+  sum() - n_strong_redundant_twice - strong_redundant %>% pull(Count) %>% pluck(1)
+strong_redundant %>%
+  paged_table()
+```
+
+We see that `r n_strong_redundant_twice` times, identical aggregates were included twice in a block.
+
+### How many times were clashing attestations included in blocks?
+
+We define **clashing** attestations as two aggregate attestations included in the same block, with identical attributes (same attesting slot, beacon chain head, source block and target block). We can further define the following two notions, assuming the two aggregate attestations include attestations of validator sets $I$ and $J$ respectively:
+
+- **Weakly clashing:** the two aggregates have different validator indices, $I \neq J$.
+- **Strongly clashing:** $I \neq J$ **and** $I \cap J \neq \emptyset$. The two aggregate attestations were incompatible, so could not be aggregated further.
+
+We obtain how many times an attestation weakly clashes with itself, i.e., is included multiple times in a single block with different validator sets. For instance, if an aggregate attestation is included in the same block three times with a different set of validator indices each time, we record that this aggregate is weakly clashing three times with itself. We give below the histogram of this measure.
+
+```{r}
+logical_ats %>%
+  distinct() %>%
+  group_by(slot, att_slot, committee_index, beacon_block_root, source_block_root, target_block_root) %>%
+  summarise(n = n()) %>%
+  group_by(n) %>%
+  summarise(count = n()) %>%
+  mutate(clashing = if_else(n == 1, "Non-weakly clashing", "Weakly clashing")) %>%
+  ggplot() +
+  geom_col(aes(x = n, y = count, group=clashing, fill=clashing)) +
+  scale_y_log10() +
+  scale_fill_manual(values = c(myyellow, myred)) +
+  xlab("Times clashing") +
+  ylab("Count (log10)")
+```
+
+From the plot above, we observe that some aggregates were included over 40 times in the same block, all with different sets of validator indices. Still, most aggregates were included once or a few times.
+
+Finding weakly clashing attestations that are not strongly clashing (i.e., which could have been aggregated further) is left for future work as it is more computationally intensive. In particular, for a set of aggregates identical up to their validator indices, one must find which have an empty overlap.
+
+Note that optimally aggregating a set of aggregates is NP-complete! Here is a reduction of the optimal aggregation problem to the [graph colouring](https://en.wikipedia.org/wiki/Graph_coloring). Set aggregate attestations as vertices in a graph, with an edge drawn between two vertices if the validator sets of the two aggregates have a non-empty overlap. In the graph colouring, we look for the minimum number of colours necessary to assign a colour to each vertex such that two connected vertices do not have the same colour. All vertices who share the same colour have an empty overlap, and thus can be combined into an aggregate. The minimum number of colours necessary to colour the graph tells us how few aggregates were necessary to combine a given set of aggregates further.
+
+```{r}
+all_bxs %>%
+  anti_join(all_bxs, by = c("block_root" = "parent_root")) %>%
+  View()
+```
+
+
+```{r}
+dbClearResult(res)
+
+# Disconnect from the database
+dbDisconnect(con)
+```
+
