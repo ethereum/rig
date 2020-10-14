@@ -252,64 +252,6 @@ The two averages are mighty close to each other, with big blocks posting even sl
 **Addendum:** Vitalik performed a thorough analysis two years ago looking at [demand elasticity to the block size (on ethresear.ch)](https://ethresear.ch/t/estimating-cryptocurrency-transaction-demand-elasticity-from-natural-experiments/2330). You can also check [his tweet](https://twitter.com/VitalikButerin/status/1288082095051546624) mentioning elasticity close to 1. With gas limit upped from 12M to 12.5M (a mere 4% increase), the result we observe here is not suprising.
 </aside>
 
-```{r}
-total_gas_spent <- (blocks %>%
-  summarise(total_gas = sum(gas_used)))$total_gas[1]
-
-empirical_bid_distribution <- txs %>%
-  group_by(gas_price) %>%
-  summarise(freq = sum(gas) / total_gas_spent) %>%
-  add_column(cumfreq = cumsum(.$freq))
-
-txs %>%
-  group_by(block_number) %>%
-  summarise(gas_used = sum(gas))
-
-stats_per_chunk <- blocks_sample %>%
-  mutate(block_chunk = block_number %/% chunk_size) %>%
-  replace_na(list(
-    avg_gas_price = 0, gas_used = 0)) %>%
-  mutate(block_num = gas_used * avg_gas_price) %>%
-  group_by(block_chunk) %>%
-  summarise(gas_limit_chunk = sum(gas_limit),
-            gas_used_chunk = sum(gas_used),
-            num_chunk = sum(block_num),
-            avg_gas_price = num_chunk / gas_used_chunk,
-            block_date = min(block_date),
-            prop_used = gas_used_chunk / gas_limit_chunk,
-            avg_gas_limit_chunk = mean(gas_limit),
-            avg_gas_used_chunk = mean(gas_used))
-
-lookup <- tibble(
-  prices = stats_per_chunk$avg_gas_price,
-  indices = findInterval(stats_per_chunk$avg_gas_price * (10 ** 9), empirical_bid_distribution$gas_price)
-) %>%
-  add_column(q = empirical_bid_distribution$cumfreq[.$indices])
-
-
-```
-
-```{r}
-txs %>%
-  group_by(block_number) %>%
-  summarise(sum(gas))
-
-txs %>%
-  filter(block_number == 10500001) %>%
-  summarise(sum(gas))
-```
-
-
-```{r}
-txs %>%
-  filter(hash == "0xb2eef29aa037f064acb08eb520343ad67aa3f42661d53779c8244b904a9c1801")
-```
-
-```{r}
-txs %>%
-  filter(hash == "0xc26bb4efa05c6d6a75c78c83ce3a0f457b834b3da2560260ce536d04e0e4bb68")
-```
-
 
 
 
