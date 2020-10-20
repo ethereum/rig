@@ -48,6 +48,7 @@ Meet the RIG and check our previous talks!
 
 | Talk | Location | Date | Link |
 |---|---|---|---|
+| Strategic issues in EIP 1559 | Online (ETHTaipei) | 15 October 2020 | [Video](https://www.youtube.com/watch?v=3pErNDU5BiE) + [Slides](https://docs.google.com/presentation/d/1AHQAgLqAIsiF_Vd2pcYaMBvg0v8d-01_yzsWJLOLj4I/edit) |
 | Ethereum's new transaction fee market design, EIP 1559 | Online (SUTD) | 25 September 2020 | [Notes/slides](assets/pdf/notes-georgios.pdf) |
 | cadCAD community call #2 | Online | 28 August 2020 | [Video](https://www.youtube.com/watch?v=SVNNvTiIKlg) + [Slides](https://docs.google.com/presentation/d/13PHT4fIw7g_fhOfkagZRyxjeVO8dM3z6zjRMQkY0j1U/edit?usp=sharing) |
 | Eth Magicians EIP 1559 panel | Online | 29 July 2020 | [Video](https://www.youtube.com/watch?v=kNSpugOwQ1o) |
