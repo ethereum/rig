@@ -38,7 +38,7 @@ options(digits=10)
 options(scipen = 999) 
 
 # Make the plots a bit less pixellated
-knitr::opts_chunk$set(dpi = 300)
+knitr::opts_chunk$set(dpi = 400)
 knitr::opts_chunk$set(message = FALSE)
 knitr::opts_chunk$set(warning = FALSE)
 
@@ -159,7 +159,7 @@ fread(here::here("rds_data/exploded_ats_0.csv")) %>%
 
 `exploded_ats` is the "disaggregated" version of the aggregate attestations. To check for validator performance, we often don't need to check for every inclusion of their individual attestations. `individual_ats` contains these unique, individual attestations, tagged with some extra data such as their earliest inclusion and whether they attested correctly for the target checkpoint and the head.
 
-```{r}
+```{r, layout="l-body-outset"}
 fread(here::here("rds_data/individual_ats_0.csv")) %>%
   arrange(att_slot, committee_index, index_in_committee) %>%
   head() %>%
@@ -170,7 +170,7 @@ fread(here::here("rds_data/individual_ats_0.csv")) %>%
 
 Validators are allowed to deposit more ETH into their eth2 accounts. Later on, we compute the reward obtained by a validator by comparing its initial balance with its current balance. We must then deduct deposits that were made since genesis.
 
-```{r}
+```{r, layout="l-body-outset"}
 all_dps %>%
   head() %>%
   paged_table()
@@ -239,7 +239,7 @@ For each validator, we compute a bunch of statistics, including:
 - `correct_targets`/`correct_heads`: How many times they correctly attested for the target checkpoint or the head
 - `avg_delay`: Their average inclusion delay
 
-```{r}
+```{r, layout="l-body-outset"}
 fread(here::here("rds_data/stats_per_val.csv")) %>%
   select(validator_index, included_ats, first_att, last_att, correct_targets,
          correct_heads, avg_delay) %>%
@@ -255,7 +255,7 @@ We also record summary statistics for each slot. At `r until_slot` slots in our 
 - `expected_ats`: How many attestations were expected for the slot.
 - `correct_targets`/`correct_heads`: The number of correct target/head attestations for that slot.
 
-```{r}
+```{r, layout="l-body-outset"}
 fread(here::here("rds_data/stats_per_slot.csv")) %>%
   select(att_slot, included_ats, expected_ats, correct_targets, correct_heads) %>%
   head() %>%
@@ -548,14 +548,17 @@ Recently activated validators have a much more balanced uptime-reward curve, wit
 
 ```{r}
 uptime_rewards %>%
-  filter(time_active == until_epoch) %>%
+  mutate(`Activation epoch` = if_else(time_active > 9000, "Early validators (activation before epoch 3000)", "Late validators (activation after epoch 3000)")) %>%
   ggplot() +
-  geom_point(aes(x = percent_attested, y = balance_diff), alpha = 0.2, color=mygreen) +
+  geom_point(aes(x = percent_attested, y = balance_diff,
+                 group=`Activation epoch`, color=`Activation epoch`),
+             alpha = 0.2) +
   geom_hline(yintercept = 0, colour = "steelblue", linetype = "dashed") +
-  # scale_color_manual(name = "Head correct", values = c(myred, mygreen)) +
-  # facet_wrap(vars(blocks_proposed), ncol = 2) +
+  scale_color_manual(values = c(myred, mygreen)) +
+  facet_wrap(vars(`Activation epoch`)) +
   xlab("Percent of epochs attested") +
-  ylab("Annualised reward (%)")
+  ylab("Annualised reward (%)") +
+  guides(color=FALSE)
 ```
 
 Inactivity leaks push the uptime-rewards curve downwards. At best, validators can preserve their current balance if they validate optimally, with inclusion delay at 1 always. Most likely, active validators lose a small amount of their balance due to delay or attestation errors, while inactive validators leak much more.
