@@ -20,6 +20,22 @@ batch_ops <- function(df, fn, filter_fn = NULL, batch_size = 1e4) {
     return()
 }
 
+batch_ops_per_slot <- function(df, fn, from_slot=0, to_slot=4e5, batch_size = 1e2) {
+  batches <- (to_slot - from_slot) / batch_size
+  print(str_c(batches, " batches"))
+  (0:(batches-1)) %>%
+    map(function(batch) {
+      print(str_c("Batch ", batch, " out of ", batches, " batches, from slot ",
+                  from_slot + batch * batch_size, " to slot ", from_slot + (batch + 1) * batch_size))
+      df %>%
+        filter(slot >= from_slot + batch * batch_size,
+               slot < from_slot + (batch + 1) * batch_size) %>%
+        fn()
+    }) %>%
+    bind_rows() %>%
+    return()
+}
+
 batch_ops_ats <- function(fn, dataset = "individual") {
   (0:387) %>%
     map(

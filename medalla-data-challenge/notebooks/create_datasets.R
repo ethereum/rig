@@ -4,6 +4,8 @@ library(RPostgres)
 library(DBI)
 library(data.table)
 
+options(dplyr.summarise.inform=F)
+
 source(here::here("notebooks/lib.R"))
 source(here::here("notebooks/pw.R"))
 
@@ -41,7 +43,15 @@ all_ats <- (start_suffix:end_suffix) %>%
         mutate(beacon_block_root = str_trunc(beacon_block_root, 10, "left", ellipsis = ""),
                source_block_root = str_trunc(source_block_root, 10, "left", ellipsis = ""),
                target_block_root = str_trunc(target_block_root, 10, "left", ellipsis = ""),
-               contained_ats = str_count(attesting_indices, "1"))) %>%
+               contained_ats = str_count(attesting_indices, "1"),
+               declared_client = case_when(
+                 str_starts(graffiti, "poap") & str_ends(graffiti, "a") ~ "prysm",
+                 str_starts(graffiti, "poap") & str_ends(graffiti, "b") ~ "lighthouse",
+                 str_starts(graffiti, "poap") & str_ends(graffiti, "c") ~ "teku",
+                 str_starts(graffiti, "poap") & str_ends(graffiti, "d") ~ "nimbus",
+                 str_starts(graffiti, "poap") & str_ends(graffiti, "e") ~ "lodestar",
+               ))
+      ) %>%
   bind_rows()
 all_ats %>% fwrite(here::here("rds_data/all_ats.csv"))
 
@@ -95,6 +105,89 @@ tibble(
   ) %>%
   mutate(block_root = .$block_root %>% na.locf()) %>%
   write_csv(here::here("rds_data/block_root_at_slot.csv"))
+
+### Includes
+
+find_includes <- function(bunch) {
+  if (nrow(bunch) == 1) {
+    return(NULL)
+  }
+  
+  t <- bunch %>%
+    pull(attesting_indices) %>%
+    str_extract_all("[01]") %>%
+    map(strtoi) %>%
+    map(as.logical) %>%
+    tibble(indices = .)
+
+  t %>%
+    mutate(group = 1,
+           agg_index = row_number()) %>%
+    full_join(t %>%
+                mutate(group = 1,
+                       agg_index = row_number()),
+              by = c("group" = "group")) %>%
+    filter(agg_index.x < agg_index.y) %>%
+    rowwise() %>%
+    mutate(or_op = list(indices.x | indices.y),
+           x_in_y = identical(indices.y, or_op),
+           y_in_x = identical(indices.x, or_op),
+           subset_is_individual = case_when(
+             x_in_y & sum(indices.x) == 1 ~ TRUE,
+             y_in_x & sum(indices.y) == 1 ~ TRUE,
+             TRUE ~ FALSE
+           )) %>%
+    select(agg_index.x, agg_index.y, x_in_y, y_in_x, subset_is_individual)
+}
+
+count_includes <- function(si) {
+  if (is.null(si)) {
+    return(0)
+  }
+  
+  si %>%
+    summarise(how_many = sum(x_in_y) + sum(y_in_x)) %>%
+    pull(how_many) %>%
+    pluck(1)
+}
+
+count_includes_subset_ind <- function(si) {
+  if (is.null(si)) {
+    return(0)
+  }
+  
+  si %>%
+    summarise(how_many_ind = sum(subset_is_individual)) %>%
+    pull(how_many_ind) %>%
+    pluck(1)
+}
+
+t <- batch_ops_per_slot(
+  all_ats,
+  function(df) {
+    if (nrow(df) == 0) {
+      return(NULL)
+    }
+    df %>%
+      group_by(slot, att_slot, committee_index, beacon_block_root, source_block_root, target_block_root) %>%
+      nest() %>%
+      mutate(includes = map(data, find_includes),
+             how_many = map(includes, count_includes) %>% unlist(),
+             how_many_ind = map(includes, count_includes_subset_ind) %>% unlist()) %>%
+      filter(how_many > 0) %>%
+      return()
+  },
+  from_slot = 0,
+  to_slot = 10000
+)
+
+t %>%
+  select(slot, att_slot, committee_index, beacon_block_root,
+         source_block_root, target_block_root, how_many, how_many_ind) %>%
+  fwrite(here::here("rds_data/subset_ats.csv"))
+
+# Try that it is correct with a small example
+t <- tibble(indices = list(c(T,T), c(T,F)))
 
 ### logical_ats
 

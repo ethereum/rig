@@ -601,14 +601,15 @@ The plot looks rather homogeneous...
 
 eth2 is built to scale to tens of thousands of validators. This introduces overhead from message passing (and inclusion) when these validators are asked to vote on the canonical chain. To alleviate the beacon chain, votes (a.k.a. **individual attestations**) can be **aggregated**.
 
-In particular, an attestation contains four attributes:
+In particular, an attestation contains five attributes:
 
-- The slot it is attesting for ("**attestation slot**")
+- The slot it is attesting for ("**attestation slot**").
+- The index of its committee in the slot ("**attestation committee**").
 - Its vote for the head of the beacon chain, given by the fork choice rule.
 - Its vote for the source, i.e., the last justified checkpoint in its view.
 - Its vote for the target, i.e., the checkpoint to be justified in its view.
 
-Since we expect validators to broadly agree in times of low latency, we also expect that a lot of individual attestations will share these same four attributes. We can aggregate such a set of individual attestations $I$ into a single, aggregate, attestation.
+Since we expect validators to broadly agree in times of low latency, we also expect that a lot of individual attestations will share these same five attributes. We can aggregate such a set of individual attestations $I$ into a single, aggregate, attestation.
 
 <aside>
 Aggregators are randomly selected by the beacon chain, whose job it is to collect such individual attestations and package them in aggregates.
@@ -688,9 +689,11 @@ We compare how many individual attestations exist to how many aggregates were in
 
 ```{r}
 n_aggregates <- all_ats %>% nrow()
+savings_ratio <- round(n_individual_ats / n_aggregates, digits=2)
+
 tibble(Name = c("Individual attestations", "Included aggregates", "Savings ratio"),
        Value = c(n_individual_ats, n_aggregates,
-                 round(n_individual_ats / n_aggregates, digits=2))) %>%
+                 savings_ratio)) %>%
   paged_table()
 ```
 
@@ -715,7 +718,7 @@ Most attestations were included in an aggregate once only
 
 ### How many redundant aggregate attestations are there?
 
-We call **redundant** identical aggregate attestations (same four attributes and same set of validator indices) which are included in more than one block. It can happen when a block producer does not see that an aggregate was previously included (e.g., because of latency), or simply when the block producer doesn't pay attention and greedily adds as many aggregates as they know about.
+We call **redundant** identical aggregate attestations (same five attributes and same set of validator indices) which are included in more than one block. It can happen when a block producer does not see that an aggregate was previously included (e.g., because of latency), or simply when the block producer doesn't pay attention and greedily adds as many aggregates as they know about.
 
 ```{r}
 readRDS(here::here("rds_data/redundant_ats.rds")) %>%
@@ -750,7 +753,7 @@ We see that `r n_strong_redundant_twice` times, identical aggregates were includ
 
 ### How many times were clashing attestations included in blocks?
 
-We define **clashing** attestations as two aggregate attestations included in the same block, with identical attributes (same attesting slot, beacon chain head, source block and target block). We can further define the following two notions, assuming the two aggregate attestations include attestations of validator sets $I$ and $J$ respectively:
+We define **clashing** attestations as two aggregate attestations included in the same block, with identical attributes (same attesting slot, attesting committee, beacon chain head, source block and target block). We can further define the following two notions, assuming the two aggregate attestations include attestations of validator sets $I$ and $J$ respectively:
 
 - **Weakly clashing:** the two aggregates have different validator indices, $I \neq J$.
 - **Strongly clashing:** $I \neq J$ **and** $I \cap J \neq \emptyset$. The two aggregate attestations were incompatible, so could not be aggregated further.
@@ -776,6 +779,75 @@ From the plot above, we observe that some aggregates were included over 40 times
 Finding weakly clashing attestations that are not strongly clashing (i.e., which could have been aggregated further) is left for future work as it is more computationally intensive. In particular, for a set of aggregates identical up to their validator indices, one must find which have an empty overlap.
 
 Note that optimally aggregating a set of aggregates is NP-complete! Here is a reduction of the optimal aggregation problem to the [graph colouring](https://en.wikipedia.org/wiki/Graph_coloring). Set aggregate attestations as vertices in a graph, with an edge drawn between two vertices if the validator sets of the two aggregates have a non-empty overlap. In the graph colouring, we look for the minimum number of colours necessary to assign a colour to each vertex such that two connected vertices do not have the same colour. All vertices who share the same colour have an empty overlap, and thus can be combined into an aggregate. The minimum number of colours necessary to colour the graph tells us how few aggregates were necessary to combine a given set of aggregates further.
+
+### How many aggregates in a block are included by another aggregate in the same block?
+
+We now define **subset aggregates**. Suppose two aggregates in the same block with equal attributes (slot, committee index, beacon root, source root and target root) include validator sets $I$ and $J$ respectively. If we have $I \subseteq J$, i.e., if all validators of the first aggregate are also included in the second aggregate, then we call the first aggregate a **subset aggregate** of the second.
+
+Subset aggregates, much like redundant aggregate attestations (equal aggregates included in more than one block of the canonical chain), can be removed from the finalised chain without losing any voting information. In fact, subset aggregates use much less local information than redundant aggregates. To root out subset aggregates, a client simply must ensure that no aggregate it is prepared to include in a block is a subset aggregate of another. Meanwhile, to root out redundant aggregates, a client must check all past blocks (until the inclusion limit of 32 slots) to ensure that it is not including a redundant aggregate. In a sense, subset aggregate are "worse" as they should be easier to root out.
+
+So among all included aggregates in blocks, how many are subset aggregates?
+
+```{r}
+subset_ats <- fread(here::here("rds_data/subset_ats.csv"))
+n_aggregates_until <- all_ats %>%
+  filter(slot < 20000) %>%
+  nrow()
+
+n_subset_ats <- sum(subset_ats$how_many)
+percent_subset <- round(n_subset_ats / n_aggregates_until, digits=4) * 100
+tibble(Name = c("Subset aggregates", "Included aggregates", "Percentage of subset aggregates"),
+       Value = c(n_subset_ats, n_aggregates_until,
+                 percent_subset)) %>%
+  paged_table()
+```
+
+We find that `r percent_subset`% included aggregates are subset aggregates.
+
+#### How often are subset aggregates of size 1?
+
+Taking a look at instances of subset aggregates, we often observe that the subset aggregate has size 1. In other words, it is often the case that a "big" aggregate is included, aggregating very many validators, and then a second aggregate of size 1, namely, an individual attestation, is included too, while this second individual attestation is already aggregated by the first, larger aggregate.
+
+```{r}
+n_subset_ind_ats <- sum(subset_ats$how_many_ind)
+percent_subset_ind <- round(n_subset_ind_ats / n_subset_ats, digits=4) * 100
+tibble(Name = c("Subset aggregates of size 1", "Subset aggregates",
+                "Percentage of subset aggregates of size 1 among subset aggregates"),
+       Value = c(n_subset_ind_ats, n_subset_ats,
+                 percent_subset_ind)) %>%
+  paged_table()
+```
+
+A large majority of subset aggregates (`r percent_subset_ind`%) have size 1.
+
+### Aggregates glossary
+
+```{r}
+n_size_1_ags <- all_ats %>%
+  .[, .(count=.N), by=contained_ats] %>%
+  pull(count) %>%
+  pluck(1)
+n_redundant_ags <- readRDS(here::here("rds_data/redundant_ats.rds")) %>%
+  filter(appearances > 1) %>%
+  pull(count) %>%
+  sum()
+```
+
+We've looked at aggregate attestations in a few different ways. We offer here a table to summarise the definitions we have introduced and associated statistics.
+
+| Name | Explanation | Statistics |
+|-|-|-|
+| Aggregate | Attestation summarising the vote of validators in a single committee | There are `r n_aggregates` aggregates included from slot 0 to slot `r until_slot` |
+| Individual attestation | A single validator vote | There are `r n_individual_ats` individual attestations |
+| Savings ratio | The ratio of individual attestations to aggregate attestations | The savings ratio is `r savings_ratio` |
+| Aggregate of size 1 | An individual attestations included without being aggregated | There are `r n_size_1_ags` aggregates of size 1 |
+| Redundant aggregate | An aggregate included more than once on-chain | There are `r n_redundant_ags` redundant aggregates |
+| Strongly redundant aggregate | An aggregate included more than once _in the same block_ | There are `r n_strong_redundant_twice + n_strong_redundant_over_twice` strongly redundant aggregates |
+| Clashing aggregates | Two aggregates included in the same block differing only by their attesting indices | x |
+| Weakly clashing aggregates | Clashing aggregates with attesting indices $I$ and $J$ such that $I \neq J$ | x |
+| Strongly clashing aggregates | Clashing aggregates with attesting indices $I$ and $J$ such that $I \neq J$ and $I \cap J \neq \emptyset$. These are aggregates that cannot be aggregated further | x |
+| Subset aggregate | An aggregate fully contained in another aggregate included in the same block | There are `r n_subset_ats` subset aggregates until slot 20000, `r percent_subset`% of all aggregates until slot 20000 |
+| Subset aggregate of size 1 | A subset aggregate which is an unaggregated individual attestation | There are `r n_subset_ind_ats` subset aggregates of size 1 until slot 20000, `r percent_subset_ind`% of all subset aggregates until slot 20000 |
 
 ```{r}
 # Disconnect from the database
