@@ -177,8 +177,8 @@ t <- batch_ops_per_slot(
       filter(how_many > 0) %>%
       return()
   },
-  from_slot = 0,
-  to_slot = 10000
+  from_slot = 20000,
+  to_slot = 30000
 )
 
 t %>%

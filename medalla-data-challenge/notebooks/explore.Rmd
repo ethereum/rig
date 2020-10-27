@@ -784,6 +784,10 @@ Note that optimally aggregating a set of aggregates is NP-complete! Here is a re
 
 We now define **subset aggregates**. Suppose two aggregates in the same block with equal attributes (slot, committee index, beacon root, source root and target root) include validator sets $I$ and $J$ respectively. If we have $I \subseteq J$, i.e., if all validators of the first aggregate are also included in the second aggregate, then we call the first aggregate a **subset aggregate** of the second.
 
+<aside>
+Note that this analysis is only done for blocks up until slot 20,000 for now.
+</aside>
+
 Subset aggregates, much like redundant aggregate attestations (equal aggregates included in more than one block of the canonical chain), can be removed from the finalised chain without losing any voting information. In fact, subset aggregates use much less local information than redundant aggregates. To root out subset aggregates, a client simply must ensure that no aggregate it is prepared to include in a block is a subset aggregate of another. Meanwhile, to root out redundant aggregates, a client must check all past blocks (until the inclusion limit of 32 slots) to ensure that it is not including a redundant aggregate. In a sense, subset aggregate are "worse" as they should be easier to root out.
 
 So among all included aggregates in blocks, how many are subset aggregates?
@@ -812,7 +816,7 @@ Taking a look at instances of subset aggregates, we often observe that the subse
 n_subset_ind_ats <- sum(subset_ats$how_many_ind)
 percent_subset_ind <- round(n_subset_ind_ats / n_subset_ats, digits=4) * 100
 tibble(Name = c("Subset aggregates of size 1", "Subset aggregates",
-                "Percentage of subset aggregates of size 1 among subset aggregates"),
+                "Percentage of subset aggregates of size 1"),
        Value = c(n_subset_ind_ats, n_subset_ats,
                  percent_subset_ind)) %>%
   paged_table()
