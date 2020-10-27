@@ -52,10 +52,13 @@ capture_validators <- function(df) {
     rowwise() %>%
     mutate(pubkey = str_c(c("0x", raw2hex(f_public_key)), collapse="")) %>%
     ungroup() %>%
-    select(pubkey, validator_index = f_index, activation_epoch = f_activation_epoch) %>%
-    mutate(validator_index = as.numeric(validator_index),
+    select(pubkey, validator_index = f_index, activation_epoch = f_activation_epoch,
+           exit_epoch = f_exit_epoch) %>%
+    mutate(exit_epoch = as.numeric(exit_epoch),
+           last_epoch = if_else(exit_epoch == -1, until_epoch, pmin(exit_epoch, until_epoch)),
+           validator_index = as.numeric(validator_index),
            activation_epoch = as.numeric(activation_epoch),
-           time_active = until_epoch - activation_epoch)
+           time_active = last_epoch - activation_epoch)
 }
 
 res <- dbSendQuery(con, "SELECT * FROM t_validators")

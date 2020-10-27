@@ -166,20 +166,6 @@ fread(here::here("rds_data/individual_ats_0.csv")) %>%
   paged_table()
 ```
 
-#### `all_dps`
-
-Validators are allowed to deposit more ETH into their eth2 accounts. Later on, we compute the reward obtained by a validator by comparing its initial balance with its current balance. We must then deduct deposits that were made since genesis.
-
-```{r, layout="l-body-outset"}
-all_dps %>%
-  head() %>%
-  paged_table()
-```
-
-<aside>
-The validator index is not included in the `Deposit` object recorded on the beacon chain. We use data from the Weald dump, presented below, to recover the validator index from its public key.
-</aside>
-
 ### Weald dump
 
 [Jim McDonald](https://twitter.com/AttestantIO), from Attestant, kindly provided a treasure trove of data on the #medalla-data-challenge channel of the EthStaker Discord server. The two previous datasets could have legitimately been mined from Jim's data, but we like to get our hands dirty.
@@ -217,14 +203,6 @@ val_balances %>%
   head() %>%
   paged_table()
 ```
-
-<!-- ### Which attestations vote for sources, targets or chain head outside of the known blocks? -->
-
-<!-- ```{r} -->
-<!-- correct_ats <- all_ats %>% -->
-<!--   inner_join(all_bxs %>% select(block_root), by = c("source_block_root" = "block_root")) %>% # same number as `all_ats` -->
-<!--   inner_join(all_bxs %>% select(block_root), by = c("target_block_root" = "block_root")) # smaller than `all_ats` -->
-<!-- ``` -->
 
 ### Computed datasets
 
@@ -283,6 +261,8 @@ fread(here::here("rds_data/stats_per_slot.csv")) %>%
     x = slot_chunk * slot_chunk_res %/% slots_per_epoch, y = percent_received,
     label = round(percent_received, digits = 1)),
     colour = myred, alpha = 0.7, nudge_y = -4) +
+  ggtitle("Proportion of included attestations",
+          subtitle=str_c("Group size = ", slot_chunk_res, " slots")) +
   xlab("Epoch") +
   ylab("Percent attested and included") +
   ylim(0, 100)
@@ -313,6 +293,8 @@ tibble(slot = 0:until_slot) %>%
     x = slot_chunk * slot_chunk_res %/% slots_per_epoch, y = percent_proposed,
     label = round(percent_proposed, digits = 1)),
     colour = myred, alpha = 0.7, nudge_y = -4) +
+  ggtitle("Proportion of included blocks",
+          subtitle=str_c("Group size = ", slot_chunk_res, " slots")) +
   xlab("Epoch") +
   ylab("Percent proposed and included") +
   ylim(0, 100)
@@ -357,6 +339,8 @@ fread(here::here("rds_data/stats_per_slot.csv")) %>%
     x = slot_chunk * slot_chunk_res %/% slots_per_epoch, y = percent_correct_target,
     label = round(percent_correct_target, digits = 1)),
     colour = mygreen, alpha = 0.7, nudge_y = -4) +
+  ggtitle("Correct targets in included attestations",
+          subtitle=str_c("Group size = ", slot_chunk_res, " slots")) +
   xlab("Epoch") +
   ylab("Percent correct targets") +
   ylim(0, 100)
@@ -386,7 +370,7 @@ fread(here::here("rds_data/stats_per_slot.csv")) %>%
   .[, slot_chunk:=att_slot %/% slot_chunk_res] %>%
   .[, .(percent_correct_head=sum(correct_heads) / sum(included_ats) * 100), by=slot_chunk] %>%
   ggplot() +
-  geom_line(aes(x = slot_chunk * slot_chunk_res %/% slots_per_epoch, y = percent_correct_head),
+  geom_line(aes(x = (slot_chunk * slot_chunk_res) %/% slots_per_epoch, y = percent_correct_head),
             colour = "purple") +
   geom_point(aes(x = slot_chunk * slot_chunk_res %/% slots_per_epoch, y = percent_correct_head),
              colour = "purple") +
@@ -394,6 +378,8 @@ fread(here::here("rds_data/stats_per_slot.csv")) %>%
     x = slot_chunk * slot_chunk_res %/% slots_per_epoch, y = percent_correct_head,
     label = round(percent_correct_head, digits = 1)),
     colour = "purple", alpha = 0.7, nudge_y = -4) +
+  ggtitle("Correct heads in included attestations",
+          subtitle=str_c("Group size = ", slot_chunk_res, " slots")) +
   xlab("Epoch") +
   ylab("Percent correct head") +
   ylim(0, 100)
@@ -509,13 +495,19 @@ rewards_per_val <- included_ats_per_val %>%
 rewards_per_val %>%
   filter(abs(balance_diff - mean(rewards_per_val$balance_diff)) <
            sd(rewards_per_val$balance_diff)) %>%
-  mutate(percent_attested = included_ats / (time_active + 1) * 100) %>%
-  ggplot() +
-  geom_point(aes(x = percent_attested, y = balance_diff), alpha = 0.2, colour = myred) +
-  geom_hline(yintercept = 0, colour = "steelblue", linetype = "dashed") +
-  xlab("Percent of epochs attested") +
-  ylab("Annualised reward (%)")
+  mutate(percent_attested = included_ats / (time_active + 1) * 100) %>% {
+    ggplot(., aes(x = percent_attested, y = balance_diff)) +
+      geom_point(alpha = 0.2, colour = myred) +
+      geom_hline(yintercept = 0, colour = "steelblue", linetype = "dashed") +
+      ggtitle("Uptime-rewards curve",
+              subtitle=str_c("Number of validators = ", nrow(.))) +
+      xlab("Percent of epochs attested") +
+      ylab("Annualised reward (%)")
+  }
 ```
+<aside>
+We only show return rates within one standard deviations of the mean. Very low reward rates are incurred by slashed validators.
+</aside>
 
 Who are the validators getting a negative return? We plot the same, showing how long a validator has been in service.
 
@@ -535,20 +527,22 @@ uptime_rewards %>%
   geom_point(aes(x = percent_attested, y = balance_diff, colour = time_active), alpha = 0.05) +
   geom_hline(yintercept = 0, colour = "steelblue", linetype = "dashed") +
   scale_color_viridis_c() +
+  ggtitle("Uptime-rewards curve",
+          subtitle=str_c("Number of validators = ", nrow(uptime_rewards))) +
   # scale_color_manual(name = "Head correct", values = c(myred, mygreen)) +
   # facet_wrap(vars(blocks_proposed), ncol = 2) +
   xlab("Percent of epochs attested") +
   ylab("Annualised reward (%)")
 ```
-<aside>
-We only show return rates within one standard deviations of the mean. Very low reward rates are incurred by slashed validators.
-</aside>
 
 Recently activated validators have a much more balanced uptime-reward curve, with the higher performers getting positive returns. Meanwhile, validators who were active since the beginning tend to have smaller returns. This can be due to validator fatigue (validating for a while, then turning off the rig), but a fair number of early validators have high attestation performance yet low return. The roughtime incident is likely to blame here. Let's focus on these early validators.
 
 ```{r}
+cut_off <- 3500
 uptime_rewards %>%
-  mutate(`Activation epoch` = if_else(time_active > 9000, "Early validators (activation before epoch 3000)", "Late validators (activation after epoch 3000)")) %>%
+  mutate(`Activation epoch` = if_else(time_active > (12125 - cut_off),
+                                      str_c("Early validators (activation before epoch ", cut_off, ")"),
+                                      str_c("Late validators (activation after epoch ", cut_off, ")"))) %>%
   ggplot() +
   geom_point(aes(x = percent_attested, y = balance_diff,
                  group=`Activation epoch`, color=`Activation epoch`),
@@ -556,6 +550,8 @@ uptime_rewards %>%
   geom_hline(yintercept = 0, colour = "steelblue", linetype = "dashed") +
   scale_color_manual(values = c(myred, mygreen)) +
   facet_wrap(vars(`Activation epoch`)) +
+  ggtitle("Uptime-rewards curve",
+          subtitle=str_c("Number of validators = ", nrow(uptime_rewards))) +
   xlab("Percent of epochs attested") +
   ylab("Annualised reward (%)") +
   guides(color=FALSE)
@@ -568,10 +564,13 @@ Inactivity leaks push the uptime-rewards curve downwards. At best, validators ca
 We turn our attention to the inclusion delay. Validators are rewarded for attesting timely, with higher rewards the earlier they are included in a block. We explode aggregates contained in the blocks to trace the earliest included attestation of each validator in an epoch.
 
 ```{r}
+n_individual_ats <- readRDS(here::here("rds_data/n_individual_ats.rds"))
 readRDS(here::here("rds_data/inclusion_delay_hist.rds")) %>%
   ggplot() +
   geom_col(aes(x = inclusion_delay, y = count), fill="steelblue") +
   scale_y_log10() +
+  ggtitle("Histogram of inclusion delay per individual attestation",
+          subtitle = str_c("Individual attestations = ", n_individual_ats)) +
   xlab("Inclusion delay") +
   ylab("Count (log10)")
 ```
@@ -585,30 +584,37 @@ fread(here::here("rds_data/stats_per_val.csv")) %>%
   merge(rewards_per_val %>% as.data.table(),
         by=c("validator_index", "included_ats")) %>%
   .[time_active < 7000,] %>%
-  .[included_ats > 0.7 * max(included_ats) & balance_diff < 100,] %>%
-  ggplot() +
-  geom_point(aes(x = avg_delay, y = balance_diff), alpha = 0.2, colour = myred) +
-  geom_hline(yintercept = 0, colour = "steelblue", linetype = "dashed") +
-  xlab("Average inclusion delay") +
-  ylab("Annualised reward (%)")
+  .[included_ats > 0.7 * max(included_ats) & balance_diff < 100,] %>% {
+    ggplot(., aes(x = avg_delay, y = balance_diff)) +
+      geom_point(alpha = 0.2, colour = myred) +
+      geom_hline(yintercept = 0, colour = "steelblue", linetype = "dashed") +
+      ggtitle("Annualised reward per average inclusion delay for high performing validators",
+              subtitle = str_c("Validators = ", nrow(.))) +
+      xlab("Average inclusion delay") +
+      ylab("Annualised reward (%)")
+  }
 ```
 
 The plot looks rather homogeneous...
 
 ## Aggregate attestations
 
-eth2 is built to scale to tens of thousands of validators. This introduces overhead from message passing (and inclusion) when these validators are asked to vote on the canonical chain. To alleviate the beacon chain, votes (a.k.a. **attestations**) can be **aggregated**.
+eth2 is built to scale to tens of thousands of validators. This introduces overhead from message passing (and inclusion) when these validators are asked to vote on the canonical chain. To alleviate the beacon chain, votes (a.k.a. **individual attestations**) can be **aggregated**.
 
 In particular, an attestation contains four attributes:
 
-- The slot it is attesting for.
+- The slot it is attesting for ("**attestation slot**")
 - Its vote for the head of the beacon chain, given by the fork choice rule.
 - Its vote for the source, i.e., the last justified checkpoint in its view.
 - Its vote for the target, i.e., the checkpoint to be justified in its view.
 
-Since we expect validators to broadly agree in times of low latency, we also expect a lot of redundant attestations. We can aggregate such a set of attestations $I$ into a single, aggregate, attestation.
+Since we expect validators to broadly agree in times of low latency, we also expect that a lot of individual attestations will share these same four attributes. We can aggregate such a set of individual attestations $I$ into a single, aggregate, attestation.
 
-For each slot $s$, a committee of validator $C(s)$ is determined who is expected to attest for $s$. Assume that two aggregate attestations were formed from validators attesting for $s$, one aggregate of validators in set $I \subseteq C(s)$ and the other with validators in set $J \subseteq C(s)$. We have two cases:
+<aside>
+Aggregators are randomly selected by the beacon chain, whose job it is to collect such individual attestations and package them in aggregates.
+</aside>
+
+When we have $N$ active validators, about $N / 32$ are selected to attest for each slot in an epoch. The validators for a slot $s$ are further divided between a few committees. Identical votes from validators in the same committee can be aggregated. Assume that two aggregate attestations were formed from individual attestations of validators in set $C(s, c)$, validators in committee $c$ attesting for slot $s$. One aggregate contains individual attestations from set $I \subseteq C(s, c)$ and the other individual attestations from set $J \subseteq C(s, c)$. We have two cases:
 
 - When the intersection of $I$ and $J$ is non-empty, we cannot aggregate the two aggregates further.
 - When the intersection of $I$ and $J$ is empty, the two aggregates can themselves be aggregated, into one containing attestations from validator set $I \cup J$.
@@ -622,11 +628,13 @@ all_ats %>%
   .[, .(count=.N), by=contained_ats] %>%
   ggplot() +
   geom_col(aes(x = contained_ats, y = count), fill=myred) +
+  ggtitle("Number of individual attestations per aggregate (histogram)",
+          subtitle = str_c("Aggregate attestations = ", nrow(all_ats))) +
   xlab("Number of attestations in aggregate") +
   ylab("Count")
 ```
 
-A fairly high number of aggregate attestations included in a block are actually individual attestations. Nonetheless, a significant number of aggregates tally up between 50 and 100 attestations.
+A fairly high number of aggregate attestations included in a block are actually individual attestations (the very tall bar on the left side of the plot, where number of individual attestations per aggregate is equal to 1). Nonetheless, a significant number of aggregates tally up between 50 and 100 individual attestations.
 
 We can plot the same, weighing by the size of the validator set in the aggregate, to count how many individual attestations each size of aggregates included.
 
@@ -635,6 +643,8 @@ all_ats %>%
   .[, .(count=.N * contained_ats), by=contained_ats] %>%
   ggplot() +
   geom_col(aes(x = contained_ats, y = count), fill=myred) +
+  ggtitle("Number of individual attestations per aggregate (histogram, weighted)",
+          subtitle = str_c("Aggregate attestations = ", nrow(all_ats))) +
   xlab("Number of attestations in aggregate") +
   ylab("Number of individual attestations")
 ```
@@ -664,10 +674,11 @@ L_tibble %>%
   scale_y_continuous(
     breaks = sort(c(c(L_80q), with(L_tibble, pretty(range(p))))),
   ) +
+  ggtitle("Lorenz curve of aggregate attestation sizes",
+          subtitle = str_c("Aggregate attestations = ", nrow(all_ats))) +
   xlab("Aggregation percentile") +
   ylab("Cumulative share of attestations")
 ```
-
 
 The answer is `r (100 - L_80q * 100)`%.
 
@@ -676,7 +687,6 @@ The answer is `r (100 - L_80q * 100)`%.
 We compare how many individual attestations exist to how many aggregates were included in blocks.
 
 ```{r}
-n_individual_ats <- readRDS(here::here("rds_data/n_individual_ats.rds"))
 n_aggregates <- all_ats %>% nrow()
 tibble(Name = c("Individual attestations", "Included aggregates", "Savings ratio"),
        Value = c(n_individual_ats, n_aggregates,
@@ -695,7 +705,9 @@ readRDS(here::here("rds_data/appearances_in_aggs.rds")) %>%
   ggplot() +
   geom_col(aes(x = appearances, y = count), fill=myred) +
   scale_y_log10() +
-  xlab("Number of times included in an aggregate") +
+  ggtitle("Number of times an individual attestation is included in an aggregate (histogram)",
+          subtitle = str_c("Individual attestations = ", n_individual_ats)) +
+  xlab("Number of inclusions") +
   ylab("Count (log10)")
 ```
 
@@ -709,6 +721,8 @@ We call **redundant** identical aggregate attestations (same four attributes and
 readRDS(here::here("rds_data/redundant_ats.rds")) %>%
   ggplot() +
   geom_col(aes(x = appearances, y = count), fill=myred) +
+  ggtitle("Number of times one aggregate attestation is included (histogram)",
+          subtitle = str_c("Aggregate attestations = ", nrow(all_ats))) +
   xlab("Number of times redundant") +
   ylab("Count (log10)") +
   scale_y_log10()
@@ -750,6 +764,8 @@ readRDS(here::here("rds_data/weakly_clashing.rds")) %>%
   geom_col(aes(x = appearances, y = count, group=clashing, fill=clashing)) +
   scale_y_log10() +
   scale_fill_manual("Clashing type", values = c(myyellow, myred)) +
+  ggtitle("Number of times an aggregate attestation is weakly clashing (histogram)",
+          subtitle = str_c("Aggregate attestations = ", nrow(all_ats))) +
   xlab("Times clashing") +
   ylab("Count (log10)") +
   xlim(0, 50)
