@@ -757,7 +757,16 @@ We now define **subset aggregates**. Suppose two aggregates in the same block wi
 
 Subset aggregates, much like redundant aggregate attestations (equal aggregates included in more than one block of the canonical chain), can be removed from the finalised chain without losing any voting information. In fact, subset aggregates use much less local information than redundant aggregates. To root out subset aggregates, a client simply must ensure that no aggregate it is prepared to include in a block is a subset aggregate of another. Meanwhile, to root out redundant aggregates, a client must check all past blocks (until the inclusion limit of 32 slots) to ensure that it is not including a redundant aggregate. In a sense, subset aggregate are "worse" as they should be easier to root out.
 
-So among all included aggregates in blocks, how many are subset aggregates?
+```{r}
+subset_until_slot <- 25000
+```
+
+
+So among all included aggregates in blocks, how many are subset aggregates? We count these instances for attestations included in blocks until slot `r subset_until_slot`.
+
+<aside>
+If we need to produce more heat, we may extend to more slots.
+</aside>
 
 ```{r}
 subset_ats <- (0:249) %>%
@@ -771,7 +780,7 @@ subset_ats <- (0:249) %>%
 
 # subset_ats <- fread(here::here("rds_data/subset_ats.csv"))
 n_aggregates_until <- all_ats %>%
-  filter(slot < 50000) %>%
+  filter(slot < subset_until_slot) %>%
   nrow()
 
 n_subset_ats <- sum(subset_ats$n_subset)
@@ -805,9 +814,9 @@ A large majority of subset aggregates (`r percent_subset_ind`%) have size 1.
 We look at situations where two aggregate attestations are included in the same block, with identical attributes (same attesting slot, attesting committee, beacon chain head, source block and target block) but different attesting indices and neither one is a subset of the other. We define the following two notions, assuming the two aggregate attestations include attestations of validator sets $I$ and $J$ respectively:
 
 - **Strongly clashing:** The two aggregates share some validator indices, i.e., $I \cap J \neq \emptyset$. The two aggregate attestations were incompatible, so could not be aggregated further.
-- **Weakly clashing:** the two aggregates have different validator indices, i.e., $I \cap J = \emptyset$. The two aggregate attestations could have been aggregated further.
+- **Weakly clashing:** The two aggregates have different validator indices, i.e., $I \cap J = \emptyset$. The two aggregate attestations could have been aggregated further.
 
-Let's first count how many aggregates are strongly clashing.
+Let's first count how many aggregates are strongly clashing in blocks before slot `r subset_until_slot`.
 
 ```{r}
 n_strongly_clashing <- sum(subset_ats$n_strongly_clashing)
@@ -863,9 +872,9 @@ In the next table, we present definitions classifying aggregates when two or mor
 | Name | Explanation | Statistics | Recommendation |
 |-|-|-|-|
 | Strongly redundant aggregate | An aggregate included more than once _in the same block_ | There are `r n_strong_redundant_twice + n_strong_redundant_over_twice` strongly redundant aggregates | Keep only one of the strongly redundant aggregates |
-| Subset aggregate | _If not strongly redundant_, an aggregate fully contained in another aggregate included _in the same block_ | There are `r n_subset_ats` subset aggregates until slot 25000, `r percent_subset`% of all aggregates until slot 25000 | Drop all subset aggregates |
-| Strongly clashing aggregates | _If not a subset aggregate_, an aggregate with attesting indices $I$ such that there exists another aggregate _attesting for the same in the same block_ with attesting indices $J$ and $I \cap J \neq \emptyset$ | There are `r n_strongly_clashing` strongly clashing aggregates until slot 25000, `r percent_strongly_clashing`% of all aggregates until slot 25000 | These cannot be aggregated further. Do nothing |
-| Weakly clashing aggregates | _If not a strongly clashing aggregate_, an aggregate with attesting indices $I$ such that there exists another aggregate _attesting for the same in the same block_ with attesting indices $J$ | There are `r n_weakly_clashing` weakly clashing aggregates until slot 25000, `r percent_weakly_clashing`% of all aggregates until slot 25000 | These can be aggregated further into one aggregate with attesting indices $I \cup J$. In an ideal world, we have 0 weakly clashing aggregates |
+| Subset aggregate | _If not strongly redundant_, an aggregate fully contained in another aggregate included _in the same block_ | There are `r n_subset_ats` subset aggregates until slot `r subset_until_slot`, `r percent_subset`% of all aggregates until slot `r subset_until_slot` | Drop all subset aggregates |
+| Strongly clashing aggregates | _If not a subset aggregate_, an aggregate with attesting indices $I$ such that there exists another aggregate _attesting for the same in the same block_ with attesting indices $J$ and $I \cap J \neq \emptyset$ | There are `r n_strongly_clashing` strongly clashing aggregates until slot `r subset_until_slot`, `r percent_strongly_clashing`% of all aggregates until slot `r subset_until_slot` | These cannot be aggregated further. Do nothing |
+| Weakly clashing aggregates | _If not a strongly clashing aggregate_, an aggregate with attesting indices $I$ such that there exists another aggregate _attesting for the same in the same block_ with attesting indices $J$ | There are `r n_weakly_clashing` weakly clashing aggregates until slot `r subset_until_slot`, `r percent_weakly_clashing`% of all aggregates until slot `r subset_until_slot` | These can be aggregated further into one aggregate with attesting indices $I \cup J$. In an ideal world, we have 0 weakly clashing aggregates |
 :::
 
 Size one aggregates appear often in the dataset.
@@ -873,7 +882,7 @@ Size one aggregates appear often in the dataset.
 ::: l-body-outset
 | Name | Explanation | Statistics | Recommendation |
 |-|-|-|-|
-| Subset aggregate of size 1 | A subset aggregate which is an unaggregated individual attestation | There are `r n_subset_ind_ats` subset aggregates of size 1 until slot 25000, `r percent_subset_ind`% of all subset aggregates until slot 25000 | Definitely drop these |
+| Subset aggregate of size 1 | A subset aggregate which is an unaggregated individual attestation | There are `r n_subset_ind_ats` subset aggregates of size 1 until slot `r subset_until_slot`, `r percent_subset_ind`% of all subset aggregates until slot `r subset_until_slot` | Definitely drop these |
 | Aggregate of size 1 | An individual attestations included without being aggregated | There are `r n_size_1_ags` aggregates of size 1 | Either it is weakly clashing, so aggregate it further; or it is a subset aggregate, so drop it; or it is a redundant |
 :::
 
