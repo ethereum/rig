@@ -89,10 +89,10 @@ all_ats <- fread(here::here("rds_data/all_ats.csv")) %>%
 all_vs <- fread(here::here("rds_data/all_vs.csv"))
 ```
 
-```{r}
-all_dps <- fread(here::here("rds_data/all_dps.csv")) %>%
-  .[deposit_slot <= until_slot,]
-```
+<!-- ```{r} -->
+<!-- all_dps <- fread(here::here("rds_data/all_dps.csv")) %>% -->
+<!--   .[deposit_slot <= until_slot,] -->
+<!-- ``` -->
 
 ```{r}
 capture_balances <- function(df) {
@@ -758,9 +758,8 @@ We now define **subset aggregates**. Suppose two aggregates in the same block wi
 Subset aggregates, much like redundant aggregate attestations (equal aggregates included in more than one block of the canonical chain), can be removed from the finalised chain without losing any voting information. In fact, subset aggregates use much less local information than redundant aggregates. To root out subset aggregates, a client simply must ensure that no aggregate it is prepared to include in a block is a subset aggregate of another. Meanwhile, to root out redundant aggregates, a client must check all past blocks (until the inclusion limit of 32 slots) to ensure that it is not including a redundant aggregate. In a sense, subset aggregate are "worse" as they should be easier to root out.
 
 ```{r}
-subset_until_slot <- 25000
+subset_until_slot <- 30000
 ```
-
 
 So among all included aggregates in blocks, how many are subset aggregates? We count these instances for attestations included in blocks until slot `r subset_until_slot`.
 
@@ -769,7 +768,7 @@ If we need to produce more heat, we may extend to more slots.
 </aside>
 
 ```{r}
-subset_ats <- (0:249) %>%
+subset_ats <- (0:299) %>%
   map(function(batch) {
     fread(here::here(str_c("rds_data/temp_", batch, ".csv")),
           colClasses=c("integer", "integer", "integer",

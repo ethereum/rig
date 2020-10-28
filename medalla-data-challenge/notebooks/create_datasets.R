@@ -19,18 +19,30 @@ until_slot <- until_epoch * slots_per_epoch
 slots_per_year <- 365.25 * 24 * 60 * 60 / 12
 epochs_per_year <- slots_per_year / slots_per_epoch
 start_suffix <- 1
-end_suffix <- 281
+end_suffix <- 379
 datadir <- "data"
 
 ### all_bxs
 
 all_bxs <- (start_suffix:end_suffix) %>%
   map(function(i) fread(here::here(str_c(datadir, "/blocks_", i, ".csv"))) %>%
-        filter(slot <= until_slot) %>%
         mutate(
           block_root = str_trunc(block_root, 10, "left", ellipsis = ""),
           parent_root = str_trunc(parent_root, 10, "left", ellipsis = ""),
-          state_root = str_trunc(state_root, 10, "left", ellipsis = "") 
+          state_root = str_trunc(state_root, 10, "left", ellipsis = ""),
+          declared_client = case_when(
+            (str_starts(graffiti, "poap") & str_ends(graffiti, "a")) |
+              str_detect(graffiti, "prysm") ~ "prysm",
+            (str_starts(graffiti, "poap") & str_ends(graffiti, "b")) |
+              str_detect(graffiti, "lighthouse") ~ "lighthouse",
+            (str_starts(graffiti, "poap") & str_ends(graffiti, "c")) |
+              str_detect(graffiti, "teku") ~ "teku",
+            (str_starts(graffiti, "poap") & str_ends(graffiti, "d")) |
+              str_detect(graffiti, "nimbus") ~ "nimbus",
+            (str_starts(graffiti, "poap") & str_ends(graffiti, "e")) |
+              str_detect(graffiti, "lodestar") ~ "lodestar",
+            TRUE ~ "undecided"
+          )
         )) %>%
   bind_rows()
 all_bxs %>% fwrite(here::here("rds_data/all_bxs.csv"))
@@ -39,18 +51,10 @@ all_bxs %>% fwrite(here::here("rds_data/all_bxs.csv"))
 
 all_ats <- (start_suffix:end_suffix) %>%
   map(function(i) fread(here::here(str_c(datadir, "/attestations_", i, ".csv"))) %>%
-        .[slot <= until_slot,] %>%
         mutate(beacon_block_root = str_trunc(beacon_block_root, 10, "left", ellipsis = ""),
                source_block_root = str_trunc(source_block_root, 10, "left", ellipsis = ""),
                target_block_root = str_trunc(target_block_root, 10, "left", ellipsis = ""),
-               contained_ats = str_count(attesting_indices, "1"),
-               declared_client = case_when(
-                 str_starts(graffiti, "poap") & str_ends(graffiti, "a") ~ "prysm",
-                 str_starts(graffiti, "poap") & str_ends(graffiti, "b") ~ "lighthouse",
-                 str_starts(graffiti, "poap") & str_ends(graffiti, "c") ~ "teku",
-                 str_starts(graffiti, "poap") & str_ends(graffiti, "d") ~ "nimbus",
-                 str_starts(graffiti, "poap") & str_ends(graffiti, "e") ~ "lodestar",
-               ))
+               contained_ats = str_count(attesting_indices, "1"))
       ) %>%
   bind_rows()
 all_ats %>% fwrite(here::here("rds_data/all_ats.csv"))
@@ -83,7 +87,6 @@ all_vs %>% fwrite(here::here("rds_data/all_vs.csv"))
 
 all_dps <- (start_suffix:end_suffix) %>%
   map(function(i) fread(here::here(str_c(datadir, "/deposits_", i, ".csv"))) %>%
-        filter(slot <= until_slot) %>%
         left_join(
           all_vs,
           by = c("pubkey" = "pubkey")
@@ -97,7 +100,7 @@ all_dps %>% fwrite(here::here("rds_data/all_dps.csv"))
 ### block_root_at_slot
 
 tibble(
-  slot = 0:until_slot
+  slot = 0:max(all_bxs$slot)
 ) %>%
   left_join(
     all_bxs %>% select(slot, block_root),
