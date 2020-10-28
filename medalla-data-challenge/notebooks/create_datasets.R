@@ -108,7 +108,7 @@ tibble(
 
 ### Includes
 
-find_includes <- function(bunch) {
+compare_ats <- function(bunch) {
   if (nrow(bunch) == 1) {
     return(NULL)
   }
@@ -130,37 +130,110 @@ find_includes <- function(bunch) {
     filter(agg_index.x < agg_index.y) %>%
     rowwise() %>%
     mutate(or_op = list(indices.x | indices.y),
-           x_in_y = identical(indices.y, or_op),
-           y_in_x = identical(indices.x, or_op),
+           are_same = identical(indices.x, indices.y),
+           x_in_y = identical(indices.y, or_op) & !are_same,
+           y_in_x = identical(indices.x, or_op) & !are_same,
+           and_op = list(indices.x & indices.y),
+           intersection_empty = (sum(and_op) == 0),
            subset_is_individual = case_when(
              x_in_y & sum(indices.x) == 1 ~ TRUE,
              y_in_x & sum(indices.y) == 1 ~ TRUE,
              TRUE ~ FALSE
-           )) %>%
-    select(agg_index.x, agg_index.y, x_in_y, y_in_x, subset_is_individual)
+           ),
+           strongly_clashing = (!intersection_empty & !x_in_y & !y_in_x),
+           weakly_clashing = (intersection_empty & !x_in_y & !y_in_x)) %>%
+    select(agg_index.x, agg_index.y, intersection_empty, are_same, subset_is_individual,
+           x_in_y, y_in_x, strongly_clashing, weakly_clashing)
 }
 
-count_includes <- function(si) {
+count_subset <- function(si) {
   if (is.null(si)) {
     return(0)
   }
   
   si %>%
-    summarise(how_many = sum(x_in_y) + sum(y_in_x)) %>%
-    pull(how_many) %>%
-    pluck(1)
+    pull(x_in_y) %>%
+    sum() +
+    si %>%
+    pull(y_in_x) %>%
+    sum() %>%
+    return()
 }
 
-count_includes_subset_ind <- function(si) {
+count_subset_ind <- function(si) {
   if (is.null(si)) {
     return(0)
   }
   
   si %>%
-    summarise(how_many_ind = sum(subset_is_individual)) %>%
-    pull(how_many_ind) %>%
-    pluck(1)
+    pull(subset_is_individual) %>%
+    sum() %>%
+    return()
 }
+
+count_strongly_clashing <- function(si) {
+  if (is.null(si)) {
+    return(0)
+  }
+  
+  si %>%
+    filter(strongly_clashing) %>%
+    select(agg_index = agg_index.x) %>%
+    union(
+      si %>%
+        filter(strongly_clashing) %>%
+        select(agg_index = agg_index.y)
+    ) %>%
+    distinct() %>%
+    nrow() %>%
+    return()
+}
+
+count_weakly_clashing <- function(si) {
+  if (is.null(si)) {
+    return(0)
+  }
+  
+  subset_ags <- si %>%
+    filter(x_in_y) %>%
+    select(agg_index = agg_index.x) %>%
+    union(
+      si %>%
+        filter(y_in_x) %>%
+        select(agg_index = agg_index.y)
+    ) %>%
+    distinct() %>%
+    pull(agg_index)
+  
+  strongly_clashing_ags <- si %>%
+    filter(strongly_clashing) %>%
+    select(agg_index = agg_index.x) %>%
+    union(
+      si %>%
+        filter(strongly_clashing) %>%
+        select(agg_index = agg_index.y)
+    ) %>%
+    distinct() %>%
+    pull(agg_index)
+  
+  si %>%
+    mutate(agg_index = agg_index.x) %>%
+    select(agg_index, weakly_clashing) %>%
+    union(si %>%
+            mutate(agg_index = agg_index.y) %>%
+            select(agg_index, weakly_clashing)) %>%
+    filter(!(agg_index %in% subset_ags), !(agg_index %in% strongly_clashing_ags)) %>%
+    distinct() %>%
+    pull(weakly_clashing) %>%
+    sum() %>%
+    return()
+}
+
+# Two attestations, I and J
+# Strongly redundant: I = J => Should drop one of the two
+# If not: Subset: I \subset J or J \subset I => Should drop the smaller one
+# If not: Strongly clashing: I \cap J \neq \emptyset => Cannot aggregate
+# If not: Weakly clashing => Can aggregate
 
 t <- batch_ops_per_slot(
   all_ats,
@@ -171,19 +244,27 @@ t <- batch_ops_per_slot(
     df %>%
       group_by(slot, att_slot, committee_index, beacon_block_root, source_block_root, target_block_root) %>%
       nest() %>%
-      mutate(includes = map(data, find_includes),
-             how_many = map(includes, count_includes) %>% unlist(),
-             how_many_ind = map(includes, count_includes_subset_ind) %>% unlist()) %>%
-      filter(how_many > 0) %>%
+      mutate(includes = map(data, compare_ats),
+             n_subset = map(includes, count_subset) %>% unlist(),
+             n_subset_ind = map(includes, count_subset_ind) %>% unlist(),
+             n_strongly_clashing = map(includes, count_strongly_clashing) %>% unlist(),
+             n_weakly_clashing = map(includes, count_weakly_clashing) %>% unlist()) %>%
+      filter(n_subset > 0 | n_strongly_clashing > 0 | n_weakly_clashing > 0) %>%
+      select(slot, att_slot, committee_index, beacon_block_root,
+             source_block_root, target_block_root,
+             n_subset, n_subset_ind, n_strongly_clashing, n_weakly_clashing) %>%
       return()
   },
-  from_slot = 20000,
-  to_slot = 30000
+  # from_slot = 50000,
+  # to_slot = 70000
+  from_slot = 0,
+  to_slot = 100000
 )
 
 t %>%
   select(slot, att_slot, committee_index, beacon_block_root,
          source_block_root, target_block_root, how_many, how_many_ind) %>%
+  union(fread(here::here("rds_data/subset_ats.csv"))) %>%
   fwrite(here::here("rds_data/subset_ats.csv"))
 
 # Try that it is correct with a small example

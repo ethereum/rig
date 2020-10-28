@@ -27,10 +27,12 @@ batch_ops_per_slot <- function(df, fn, from_slot=0, to_slot=4e5, batch_size = 1e
     map(function(batch) {
       print(str_c("Batch ", batch, " out of ", batches, " batches, from slot ",
                   from_slot + batch * batch_size, " to slot ", from_slot + (batch + 1) * batch_size))
-      df %>%
+      t <- df %>%
         filter(slot >= from_slot + batch * batch_size,
-               slot < from_slot + (batch + 1) * batch_size) %>%
+               slot < pmin(from_slot + (batch + 1) * batch_size, to_slot)) %>%
         fn()
+      t %>% fwrite(here::here(str_c("rds_data/temp_", batch, ".csv")))
+      t %>% return()
     }) %>%
     bind_rows() %>%
     return()
