@@ -1,0 +1,159 @@
+---
+title: "Client comparison in Medalla"
+author:
+- name: Barnabé Monnot
+  url: https://twitter.com/barnabemonnot
+  affiliation: Robust Incentives Group, Ethereum Foundation
+  affiliation_url: https://github.com/ethereum/rig
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    toc: yes
+    toc_depth: 3
+  html_document:
+    toc: yes
+    toc_depth: '3'
+    df_print: paged
+description: |
+  Looking at statistics per (declared) client.
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(glue)
+library(RPostgres)
+library(DBI)
+library(ineq)
+library(PKI)
+library(rmarkdown)
+library(zoo)
+library(data.table)
+
+source(here::here("notebooks/lib.R"))
+source(here::here("notebooks/pw.R"))
+
+con <- dbConnect(RPostgres::Postgres(), user="chain", password=pw)
+
+options(digits=10)
+options(scipen = 999) 
+
+# Make the plots a bit less pixellated
+knitr::opts_chunk$set(dpi = 400)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+
+# A minimal theme I like
+newtheme <- theme_grey() + theme(
+  axis.text = element_text(size = 9),
+  axis.title = element_text(size = 12),
+  axis.line = element_line(colour = "#000000"),
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  panel.background = element_blank(),
+  legend.title = element_text(size = 12),
+  legend.text = element_text(size = 10),
+  legend.box.background = element_blank(),
+  legend.key = element_blank(),
+  strip.text.x = element_text(size = 10),
+  strip.background = element_rect(fill = "white")
+)
+theme_set(newtheme)
+
+myred <- "#F05431"
+myyellow <- "#FED152"
+mygreen <- "#BFCE80"
+```
+
+```{r}
+until_epoch <- 12125
+slot_chunk_res <- 25000
+epoch_resolution <- 12125
+
+slots_per_epoch <- 32
+until_slot <- until_epoch * slots_per_epoch
+slots_per_year <- 365.25 * 24 * 60 * 60 / 12
+epochs_per_year <- slots_per_year / slots_per_epoch
+```
+
+```{r}
+all_bxs <- fread(here::here("rds_data/all_bxs.csv"))
+```
+
+```{r}
+all_ats <- fread(here::here("rds_data/all_ats.csv"))
+```
+
+```{r}
+blocks_per_client <- all_bxs %>%
+  .[declared_client!="undecided" & slot < 30000, .(slot, declared_client)] %>%
+  merge(fread(here::here("rds_data/subset_ats_30000.csv")) %>%
+          .[,.(n_subset=sum(n_subset)),by=slot],
+        all.x = TRUE) %>%
+  setnafill("const", 0, cols="n_subset") %>%
+  mutate(`Collection` = "0 - 30000") %>%
+  union(
+    all_bxs %>%
+      .[declared_client!="undecided" & slot >= 590000 & slot < 610000, .(slot, declared_client)] %>%
+      merge(fread(here::here("rds_data/subset_ats_590000+.csv")) %>%
+              .[,.(n_subset=sum(n_subset)),by=slot],
+            all.x = TRUE) %>%
+      setnafill("const", 0, cols="n_subset") %>%
+      mutate(`Collection` = "590000 - 610000")
+  )
+```
+
+Declared client is obtained in the graffiti:
+
+- Either when the graffiti starts with `poap` and ends with `a`, `b`, `c`, `d` and `e` (respectively, Prysm, Lighthouse, Teku, Nimbus and Lodestar)
+- Or when the graffiti contains the client name in its string (e.g., `teku/v0.12.4-dev-4855f89c`)
+
+## Aggregates
+
+### Aggregates included per block
+
+```{r}
+all_ats %>%
+  .[slot < 3e4 | (slot >= 59e4 & slot < 61e4), .(included_ats = .N), by=slot] %>%
+  merge(blocks_per_client) %>%
+  filter(declared_client != "lodestar") %>%
+  ggplot(aes(x = declared_client, y = included_ats, fill = Collection)) +
+  stat_summary(geom = "bar", fun = mean, position = "dodge") +
+  stat_summary(geom = "errorbar", fun.data = mean_se, position = position_dodge(.9), width = 0.2) +
+  scale_fill_manual(values = c(myred, myyellow)) +
+  ggtitle("Average number of aggregates included per block") +
+  xlab("Declared client") +
+  ylab("Average number of aggregates")
+```
+
+### Inclusion of subset aggregates
+
+[Subset aggregates](https://ethereum.github.io/rig/medalla-data-challenge/notebooks/explore.html) are aggregates included in a block which are fully covered by another aggregate included in the same block. Namely, when aggregate 1 has attesting indices $I$ and aggregate 2 has attesting indices $J$, aggregate 1 is a subset aggregate when $I \subset J$.
+
+```{r}
+blocks_per_client %>%
+  filter(declared_client != "lodestar") %>%
+  ggplot(aes(x = declared_client, y = n_subset, fill = Collection)) +
+  stat_summary(geom = "bar", fun = mean, position = "dodge") +
+  stat_summary(geom = "errorbar", fun.data = mean_se, position = position_dodge(.9), width = 0.2) +
+  scale_fill_manual(values = c(myred, myyellow)) +
+  ggtitle("Average number of subset aggregates per block") +
+  xlab("Declared client") +
+  ylab("Average subset aggregates")
+```
+```{r}
+all_ats %>%
+  .[slot < 3e4 | (slot >= 59e4 & slot < 61e4), .(included_ats = .N), by=slot] %>%
+  merge(blocks_per_client) %>%
+  filter(declared_client != "lodestar") %>%
+  group_by(declared_client, Collection) %>%
+  summarise(percent = sum(n_subset) / sum(included_ats) * 100) %>%
+  ggplot(aes(x = declared_client, y = percent, fill = Collection)) +
+  geom_col(position = "dodge") +
+  scale_fill_manual(values = c(myred, myyellow)) +
+  ggtitle("Percentage of subset aggregates among included aggregates") +
+  xlab("Declared client") +
+  ylab("Percentage of subset aggregates in block")
+```
+
+
+

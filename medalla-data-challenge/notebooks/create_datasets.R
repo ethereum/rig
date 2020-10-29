@@ -19,7 +19,7 @@ until_slot <- until_epoch * slots_per_epoch
 slots_per_year <- 365.25 * 24 * 60 * 60 / 12
 epochs_per_year <- slots_per_year / slots_per_epoch
 start_suffix <- 1
-end_suffix <- 379
+end_suffix <- 409
 datadir <- "data"
 
 ### all_bxs
@@ -260,8 +260,8 @@ t <- batch_ops_per_slot(
   },
   # from_slot = 50000,
   # to_slot = 70000
-  from_slot = 0,
-  to_slot = 100000
+  from_slot = 590000,
+  to_slot = 610000
 )
 
 t %>%
