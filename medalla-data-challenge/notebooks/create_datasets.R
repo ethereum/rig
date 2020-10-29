@@ -107,7 +107,7 @@ tibble(
     by = c("slot" = "slot")
   ) %>%
   mutate(block_root = .$block_root %>% na.locf()) %>%
-  write_csv(here::here("rds_data/block_root_at_slot.csv"))
+  fwrite(here::here("rds_data/block_root_at_slot.csv"))
 
 ### Includes
 
