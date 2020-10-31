@@ -38,7 +38,7 @@ options(digits=10)
 options(scipen = 999) 
 
 # Make the plots a bit less pixellated
-knitr::opts_chunk$set(dpi = 400)
+knitr::opts_chunk$set(dpi = 200)
 knitr::opts_chunk$set(message = FALSE)
 knitr::opts_chunk$set(warning = FALSE)
 

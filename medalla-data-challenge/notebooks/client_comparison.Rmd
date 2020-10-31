@@ -38,7 +38,7 @@ options(digits=10)
 options(scipen = 999) 
 
 # Make the plots a bit less pixellated
-knitr::opts_chunk$set(dpi = 400)
+knitr::opts_chunk$set(dpi = 200)
 knitr::opts_chunk$set(message = FALSE)
 knitr::opts_chunk$set(warning = FALSE)
 
@@ -85,7 +85,7 @@ all_ats <- fread(here::here("rds_data/all_ats.csv"))
 
 ```{r}
 blocks_per_client <- all_bxs %>%
-  .[declared_client!="undecided" & slot < 30000, .(slot, declared_client)] %>%
+  .[slot < 30000, .(slot, declared_client)] %>%
   merge(fread(here::here("rds_data/subset_ats_30000.csv")) %>%
           .[,.(n_subset=sum(n_subset)),by=slot],
         all.x = TRUE) %>%
@@ -93,7 +93,7 @@ blocks_per_client <- all_bxs %>%
   mutate(`Collection` = "0 - 30000") %>%
   union(
     all_bxs %>%
-      .[declared_client!="undecided" & slot >= 590000 & slot < 610000, .(slot, declared_client)] %>%
+      .[slot >= 590000 & slot < 610000, .(slot, declared_client)] %>%
       merge(fread(here::here("rds_data/subset_ats_590000+.csv")) %>%
               .[,.(n_subset=sum(n_subset)),by=slot],
             all.x = TRUE) %>%
@@ -155,5 +155,8 @@ all_ats %>%
   ylab("Percentage of subset aggregates in block")
 ```
 
+```{r}
+con %>% dbDisconnect()
+```
 
 

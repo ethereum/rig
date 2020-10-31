@@ -1,0 +1,202 @@
+---
+title: "Summer of 15614"
+author:
+- name: Barnabé Monnot
+  url: https://twitter.com/barnabemonnot
+  affiliation: Robust Incentives Group, Ethereum Foundation
+  affiliation_url: https://github.com/ethereum/rig
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    toc: yes
+    toc_depth: 3
+  html_document:
+    toc: yes
+    toc_depth: '3'
+    df_print: paged
+description: |
+  Longing for epoch 15614 and finality
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(glue)
+library(RPostgres)
+library(DBI)
+library(ineq)
+library(PKI)
+library(rmarkdown)
+library(zoo)
+library(data.table)
+
+source(here::here("notebooks/lib.R"))
+source(here::here("notebooks/pw.R"))
+
+con <- dbConnect(RPostgres::Postgres(), user="chain", password=pw)
+
+options(digits=10)
+options(scipen = 999) 
+
+# Make the plots a bit less pixellated
+knitr::opts_chunk$set(dpi = 200)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+
+# A minimal theme I like
+newtheme <- theme_grey() + theme(
+  axis.text = element_text(size = 9),
+  axis.title = element_text(size = 12),
+  axis.line = element_line(colour = "#000000"),
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  panel.background = element_blank(),
+  legend.title = element_text(size = 12),
+  legend.text = element_text(size = 10),
+  legend.box.background = element_blank(),
+  legend.key = element_blank(),
+  strip.text.x = element_text(size = 10),
+  strip.background = element_rect(fill = "white")
+)
+theme_set(newtheme)
+
+myred <- "#F05431"
+myyellow <- "#FED152"
+mygreen <- "#BFCE80"
+
+slots_per_epoch <- 32
+```
+
+```{r}
+start_epoch <- 19701
+end_epoch <- 19810
+```
+
+From epoch `r start_epoch` to `r end_epoch`.
+
+```{r}
+# all_ats <- start_epoch:end_epoch %>%
+#   map(get_attestations) %>%
+#   bind_rows()
+all_ats <- fread(here::here("per_epoch/all_ats-19701-19810.csv"))
+all_bxs <- fread(here::here("per_epoch/all_bxs-19701-19810.csv"))
+attestation_grid <- fread(here::here("per_epoch/att_grid-19701-19810.csv"))
+```
+
+```{r}
+# all_bxs <- start_epoch:end_epoch %>%
+#   map(get_blocks) %>%
+#   bind_rows()
+```
+
+```{r}
+true_all_bxs <- fread(here::here("rds_data/all_bxs.csv")) %>%
+  filter(slot < 608000) %>%
+  select(slot, parent_root, state_root, proposer_index, graffiti, declared_client) %>%
+  union(fread(here::here("per_epoch/all_bxs-19000-19700.csv"))) %>%
+  union(all_bxs)
+```
+
+```{r}
+client_per_validator <- true_all_bxs %>%
+  group_by(proposer_index, declared_client) %>%
+  summarise(client_count = n()) %>%
+  group_by(proposer_index) %>%
+  filter(client_count == max(client_count)) %>%
+  rename(validator_index = proposer_index)
+```
+
+### Gaps between blocks
+
+We look at the gap (in slots) between two consecutive blocks. The longer the gap is, the more attestations we expect the next block to carry, as evidenced by the boxplots below.
+
+```{r}
+all_bxs %>%
+  select(slot) %>%
+  mutate(last_block_slot = lag(slot)) %>%
+  drop_na() %>%
+  mutate(time_passed = slot - last_block_slot,
+         time_passed = as_factor(time_passed)) %>%
+  inner_join(
+    all_ats %>%
+      group_by(slot) %>%
+      summarise(n = n())
+  ) %>%
+  ggplot() +
+  geom_boxplot(aes(x = time_passed, y = n)) +
+  ggtitle("") +
+  xlab("Slots between two consecutive blocks") +
+  ylab("Included aggregates")
+```
+
+### Correlated client failures
+
+We plot the latest epochs on the x-axis and align validators on the y-axis. Green cells show epochs where the validator attested, and red cells where they didn't. Note that the client is obtained from the graffiti (either from the POAP tag or if the client name is in the graffiti).
+
+```{r}
+# attestation_grid <- (start_epoch:end_epoch) %>%
+#   map(function(epoch) {
+#     print(str_c("Epoch ", epoch, " until epoch ", end_epoch))
+#     get_exploded_ats(all_ats, epoch) %>%
+#       filter(value) %>%
+#       unique() %>%
+#       mutate(attested = 1) %>%
+#       merge(get_committee(epoch)) %>%
+#       select(validator_index, attested) %>%
+#       distinct() %>%
+#       merge(client_per_validator, all.y = TRUE) %>%
+#       setnafill("const", 0, cols = c("attested")) %>%
+#       mutate(epoch = epoch)
+#   }) %>%
+#   bind_rows()
+```
+
+```{r}
+library(patchwork)
+l = list()
+
+for (client in c("prysm", "lighthouse", "nimbus", "teku")) {
+  attestation_grid_per_client <- attestation_grid %>%
+    filter(epoch < 19810, epoch >= 19701) %>%
+    filter(declared_client == client) %>%
+    group_by(validator_index) %>%
+    filter(sum(attested) > 0) %>%
+    mutate(validator_index = as_factor(validator_index),
+           attested = as_factor(attested))
+  
+  p <- attestation_grid_per_client %>%
+    ggplot() +
+    geom_tile(aes(x = epoch, y = validator_index, fill = attested)) +
+    scale_fill_manual(values = c(myred, mygreen)) +
+    facet_wrap(vars(declared_client)) +
+    theme(axis.text.y=element_blank(),
+          axis.ticks.y=element_blank())
+  
+  l[[client]] <- p
+}
+
+l[["prysm"]] + l[["lighthouse"]] + l[["nimbus"]] + l[["teku"]]
+```
+
+```{r}
+fwrite(all_ats, here::here("per_epoch/all_ats-19701-19810.csv"))
+fwrite(all_bxs, here::here("per_epoch/all_bxs-19701-19810.csv"))
+fwrite(attestation_grid, here::here("per_epoch/att_grid-19701-19810.csv"))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

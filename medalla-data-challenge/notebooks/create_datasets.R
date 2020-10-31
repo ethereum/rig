@@ -15,7 +15,7 @@ until_epoch <- 12125
 slot_chunk_res <- 1000
 epoch_resolution <- 100
 slots_per_epoch <- 32
-until_slot <- until_epoch * slots_per_epoch
+until_slot <- 610000
 slots_per_year <- 365.25 * 24 * 60 * 60 / 12
 epochs_per_year <- slots_per_year / slots_per_epoch
 start_suffix <- 1
@@ -476,7 +476,27 @@ batch_ops_ats(function(df) {
   setnafill(type = "const", fill = 0, cols=c("included_ats", "correct_targets", "correct_heads")) %>%
   fwrite(here::here("rds_data/stats_per_slot.csv"))
   
-  
+### Heads and targets
+
+df <- fread(here::here("rds_data/all_ats.csv")) %>%
+  .[, epoch:=att_slot %/% slots_per_epoch] %>%
+  .[, epoch_slot:=epoch * slots_per_epoch] %>%
+  merge(
+    fread(here::here("rds_data/block_root_at_slot.csv")) %>%
+      .[, correct_target:=1],
+    by.x = c("epoch_slot", "target_block_root"),
+    by.y = c("slot", "block_root"),
+    all.x = TRUE
+  ) %>%
+  .[, `:=`(epoch = NULL, epoch_slot = NULL)] %>%
+  merge(
+    fread(here::here("rds_data/block_root_at_slot.csv")) %>%
+      .[, correct_head:=1],
+    by.x = c("att_slot", "beacon_block_root"),
+    by.y = c("slot", "block_root"),
+    all.x = TRUE
+  ) %>%
+  setnafill("const", 0, cols=c("correct_target", "correct_head"))
   
   
   
