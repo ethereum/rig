@@ -140,6 +140,7 @@ blocks_per_client %>%
   xlab("Declared client") +
   ylab("Average subset aggregates")
 ```
+
 ```{r}
 all_ats %>%
   .[slot < 3e4 | (slot >= 59e4 & slot < 61e4), .(included_ats = .N), by=slot] %>%
@@ -153,10 +154,6 @@ all_ats %>%
   ggtitle("Percentage of subset aggregates among included aggregates") +
   xlab("Declared client") +
   ylab("Percentage of subset aggregates in block")
-```
-
-```{r}
-con %>% dbDisconnect()
 ```
 
 

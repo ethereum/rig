@@ -20,25 +20,17 @@ description: |
 
 ```{r setup, include=FALSE}
 library(tidyverse)
-library(glue)
-library(RPostgres)
-library(DBI)
-library(ineq)
-library(PKI)
-library(rmarkdown)
-library(zoo)
 library(data.table)
+library(patchwork)
+library(rmarkdown)
 
 source(here::here("notebooks/lib.R"))
-source(here::here("notebooks/pw.R"))
-
-con <- dbConnect(RPostgres::Postgres(), user="chain", password=pw)
 
 options(digits=10)
 options(scipen = 999) 
 
 # Make the plots a bit less pixellated
-knitr::opts_chunk$set(dpi = 200)
+knitr::opts_chunk$set(dpi = 300)
 knitr::opts_chunk$set(message = FALSE)
 knitr::opts_chunk$set(warning = FALSE)
 
@@ -66,61 +58,312 @@ mygreen <- "#BFCE80"
 slots_per_epoch <- 32
 ```
 
-```{r}
-start_epoch <- 19701
-end_epoch <- 19810
+```{r cache=TRUE}
+all_ats <- fread(here::here("rds_data/all_ats_post_leak.csv"))
+all_bxs <- fread(here::here("rds_data/all_bxs.csv")) %>%
+  mutate(declared_client = find_client(graffiti))
 ```
 
-From epoch `r start_epoch` to `r end_epoch`.
+```{r cache=TRUE}
+# Either get the last declared client by validator
+client_per_validator <- all_bxs %>%
+  .[, .SD[which.max(slot)], by=proposer_index, .SDcols = c("slot", "declared_client")]
+
+# Or get the most used declared client by validator
+# client_per_validator <- all_bxs %>%
+#   .[, .(client_count = .N), by=.(proposer_index, declared_client)] %>%
+#   .[, .SD[which.max(client_count)], by=proposer_index]
+```
+
+```{r cache=TRUE}
+committees <- 19900:20160 %>%
+  map(function(epoch) { get_committees(epoch) }) %>%
+  rbindlist()
+```
+
+We look at statistics from recent epochs of Medalla.
+
+<aside>
+You can find [the source of this notebook](https://github.com/ethereum/rig/blob/master/medalla-data-challenge/notebooks/late_finality_leak.Rmd) over at the RIG repository. The code to [generate the datasets](https://github.com/ethereum/rig/blob/master/medalla-data-challenge/notebooks/lib.R) is also available.
+</aside>
+
+## Finding the declared client
+
+We associate each validator index to a client among Lighthouse, Prysm, Nimbus, Teku and "undecided". To do so, for each canonical block produced, we inspect the graffiti. We associate the block to a client whenever the name of the client features in the graffiti (with a case-insensitive search). When the first four characters of the graffiti are `poap`, we check the last character: when the character is "a", "b", "c", "d" or "e", we guess the client producing the block is (respectively) Prysm, Lighthouse, Teku, Nimbus or Lodestar. Due to the low prevalence of Lodestar blocks, we have decided to remove it from the analysis.
+
+Since our analysis is carried over the 300 or so latest epochs, we assume that a validator index is using the latest recorded client obtained from a block produced by that validator. When we compare the performance of a client at the beginning of the testnet (between slots 0 and 30,000), we recompute the likeliest client as the _earliest_ recorded client used by a validator index.
+
+Additionally, we make available a list associating the validator indices to their recognised client [here](https://github.com/ethereum/rig/tree/master/medalla-data-challenge/rds_data/client_per_validator.csv). If you notice any discrepancy between this list and your own observations, please let me know on [Twitter](https://twitter.com/barnabemonnot) or Discord.
+
+<aside>
+Missing validator indices in the list correspond to validators who never produced a canonical block.
+</aside>
+
+## Attester duties fulfilled by validators with declared clients
+
+We plot the latest epochs on the x-axis and align validators on the y-axis. Green cells show epochs where the validator attested, and red cells where they didn't. Note that the client is obtained from the graffiti (either from the POAP tag or if the client name is in the graffiti).
 
 ```{r}
-# all_ats <- start_epoch:end_epoch %>%
-#   map(get_attestations) %>%
-#   bind_rows()
-all_ats <- fread(here::here("per_epoch/all_ats-19701-19810.csv"))
-all_bxs <- fread(here::here("per_epoch/all_bxs-19701-19810.csv"))
-attestation_grid <- fread(here::here("per_epoch/att_grid-19701-19810.csv"))
+plot_grid <- function(start_epoch, end_epoch, committees) {
+  attestation_grid <- all_ats %>%
+    .[att_slot >= start_epoch * slots_per_epoch & att_slot < (end_epoch + 1) * slots_per_epoch,
+      .(att_slot, committee_index, attesting_indices)] %>%
+    get_exploded_ats() %>%
+    .[attested == 1,] %>%
+    merge(committees) %>%
+    .[,.(att_slot, epoch=att_slot %/% slots_per_epoch, validator_index, attested)] %>%
+    merge(client_per_validator %>%
+            .[, .(proposer_index, declared_client)],
+          by.x = c("validator_index"), by.y = c("proposer_index")) %>%
+    unique()
+  
+  l = list()
+
+  for (client in c("prysm", "lighthouse", "nimbus", "teku")) {
+    attestation_grid_per_client <- attestation_grid %>%
+      .[epoch <= end_epoch & epoch >= start_epoch & declared_client == client] %>%
+      mutate(validator_index = as_factor(validator_index),
+             attested = as_factor(attested))
+    
+    p <- attestation_grid_per_client %>%
+      ggplot() +
+      geom_tile(aes(x = epoch, y = validator_index, fill = attested)) +
+      scale_fill_manual(values = c(mygreen), guide=FALSE) +
+      scale_x_continuous(expand = c(0, 0)) +
+      facet_wrap(vars(declared_client)) +
+      theme(axis.text.y=element_blank(),
+            axis.ticks.y=element_blank(),
+            panel.background=element_rect(fill=myred, colour=myred),
+            axis.title.x = element_text(size = 8),
+            axis.title.y = element_text(size = 8),
+            axis.text.x = element_text(size = 8))
+    
+    l[[client]] <- p
+  }
+  
+  l[["prysm"]] | l[["lighthouse"]] | l[["nimbus"]] | l[["teku"]]
+}
+```
+
+### Epoch 19,900 to 19,999
+
+```{r, layout="l-screen", fig.height=2}
+plot_grid(19900, 19999, committees)
+```
+
+### Epoch 20,000 to 20,999
+
+```{r, layout="l-screen", fig.height=2}
+plot_grid(20000, 20099, committees)
+```
+
+### Epoch 20,100 to 20,160
+
+```{r, layout="l-screen", fig.height=2}
+plot_grid(20100, 20160, committees)
+```
+
+### Potential staking activity
+
+If we wanted to, could we finalise? We look at the attesting record of validators between epochs 20000 and 20160. We define a validator as _potentially active_ if the validator attested at least once during this period **and** their exit epoch is beyond epoch 20160. _Active_ validators are validators who are still expected to attest -- regardless of whether they were recognised as potentially active or not. They are detected as validators whose exit epoch is beyond 20160.
+
+```{r cache=TRUE}
+start_epoch <- 20000
+end_epoch <- 20160
+
+# Who has attested in the last x epochs?
+potential_stake <- all_ats %>%
+  .[att_slot >= start_epoch * slots_per_epoch & att_slot < (end_epoch + 1) * slots_per_epoch] %>%
+  get_exploded_ats() %>%
+  .[attested == 1,] %>%
+  merge(committees) %>%
+  .[, .(validator_index)] %>%
+  unique() %>%
+  .[, .(validator_index, attested=1)] %>%
+  merge(get_validators(end_epoch+1), all.y = TRUE) %>%
+  setnafill("const", 0, cols = c("attested"))
+```
+
+We first measure the _potential weight_, the sum of effective balances of all potentially active validators.
+
+```{r}
+w_potential_stake <- potential_stake %>%
+  .[attested == 1 & exit_epoch > 20160] %>%
+  .[, .(active_stake=sum(effective_balance))] %>%
+  pull(active_stake) %>% pluck(1)
+
+tibble(potential_stake = w_potential_stake) %>%
+  paged_table()
+```
+
+We then look at the _active weight_, the sum of effective balances of all active validators.
+
+```{r}
+w_active_stake <- potential_stake %>%
+  .[slashed == 0 & exit_epoch > 20160] %>%
+  .[, .(active_stake=sum(effective_balance))] %>%
+  pull(active_stake) %>% pluck(1)
+
+tibble(active_stake = w_active_stake) %>%
+  paged_table()
+```
+
+Getting the ratio between the two, we can get an idea of the highest participation rate we can expect.
+
+```{r}
+tibble(potential_participation = round(w_potential_stake / w_active_stake * 100, digits = 2)) %>%
+  paged_table()
+```
+
+Uh oh. We need that number to get above 66.66%.
+
+## Subset and clashing aggregations per client
+
+Here we focus our data collection on two periods:
+
+- Between slot 0 and slot 30,000.
+- Between slot 590,000 and slot 610,000.
+
+We first look at the number of aggregates included per declared client at both times.
+
+```{r cache=TRUE}
+att_type_per_block <- all_bxs %>%
+  .[slot <= 30000 | slot >= 590000 & slot <= 610000, .(proposer_index, slot)] %>%
+  merge(fread(here::here("rds_data/subset_ats.csv")) %>%
+          .[, .(n_subset=sum(n_subset), n_subset_ind=sum(n_subset_ind),
+                n_weakly_clashing=sum(n_weakly_clashing), n_strongly_clashing=sum(n_strongly_clashing)), by=slot],
+        all.x = TRUE) %>%
+  setnafill("const", 0, cols=c("n_subset", "n_subset_ind", "n_weakly_clashing", "n_strongly_clashing")) %>%
+  merge(client_per_validator %>%
+          .[, .(proposer_index, declared_client)],
+        by.x = c("proposer_index"), by.y = c("proposer_index"))
+
+collection_data <- all_ats %>%
+  .[slot >= 59e4 & slot < 61e4,] %>%
+  .[, .(included_ats = .N), by=slot] %>%
+  merge(all_bxs %>%
+          .[, .(slot, proposer_index)]) %>%
+  merge(
+    all_bxs %>%
+      .[slot < 61e4, .(slot, proposer_index, declared_client)] %>%
+      .[, .SD[which.max(slot)], by=proposer_index] %>%
+      .[, .(proposer_index, declared_client)],
+    by.x = c("proposer_index"), by.y = c("proposer_index")
+  ) %>%
+  union(
+    fread(here::here("rds_data/all_ats_30000-.csv")) %>%
+      .[, .(included_ats = .N), by=slot] %>%
+      merge(all_bxs %>%
+              .[, .(slot, proposer_index)]) %>%
+      merge(
+        all_bxs %>%
+          .[slot < 61e4, .(slot, proposer_index, declared_client)] %>%
+          .[, .SD[which.min(slot)], by=proposer_index] %>%
+          .[, .(proposer_index, declared_client)],
+        by.x = c("proposer_index"), by.y = c("proposer_index")
+      )
+  ) %>%
+  mutate(collection=if_else(slot > 50000, "590k - 610k", "0 - 30k")) %>%
+  merge(att_type_per_block %>%
+          .[, .(slot, n_subset)],
+        by.x = c("slot"), by.y = c("slot")) %>%
+  .[declared_client != "lodestar"]
 ```
 
 ```{r}
-# all_bxs <- start_epoch:end_epoch %>%
-#   map(get_blocks) %>%
-#   bind_rows()
+collection_data %>%
+  ggplot(aes(x = declared_client, y = included_ats, fill = collection)) +
+  stat_summary(geom = "bar", fun = mean, position = "dodge") +
+  stat_summary(geom = "errorbar", fun.data = mean_se, position = position_dodge(.9), width = 0.2) +
+  scale_fill_manual(values = c(myred, myyellow), name = "Collection slots") +
+  ggtitle("Average number of aggregates included per block") +
+  xlab("Declared client") +
+  ylab("Average number of aggregates")
+```
+
+This appears to tally up with Michael Sproul's claim over at the Eth R&D Discord:
+
+> As far as I can tell [Lighthouse] seems to be good at not including junk on chain, and I regularly see my validators proposing blocks that aren't full, see e.g. [https://beaconcha.in/blocks?q=I%20stay%20noided](https://beaconcha.in/blocks?q=I%20stay%20noided) I'd love someone to confirm my hunch though
+
+[Subset aggregates](https://ethereum.github.io/rig/medalla-data-challenge/notebooks/explore.html) are aggregates included in a block which are fully covered by another aggregate included in the same block. Namely, when aggregate 1 has attesting indices $I$ and aggregate 2 has attesting indices $J$, aggregate 1 is a subset aggregate when $I \subset J$. How often do these aggregates show up in various client blocks?
+
+```{r}
+att_type_per_block %>%
+  filter(declared_client != "lodestar") %>%
+  mutate(`Collection slots` = if_else(slot > 50000, "590k - 610k", "0 - 30k")) %>%
+  ggplot(aes(x = declared_client, y = n_subset, fill = `Collection slots`)) +
+  stat_summary(geom = "bar", fun = mean, position = "dodge") +
+  stat_summary(geom = "errorbar", fun.data = mean_se, position = position_dodge(.9), width = 0.2) +
+  scale_fill_manual(values = c(myred, myyellow)) +
+  ggtitle("Average number of subset aggregates per block") +
+  xlab("Declared client") +
+  ylab("Average subset aggregates")
+```
+
+Since we've seen varying average number of included aggregates per client, we can normalise by looking at the average percentage of subset aggregates included in the blocks.
+
+```{r}
+ collection_data %>%
+  .[, .(percent = sum(n_subset) / sum(included_ats) * 100), by=.(collection, declared_client)] %>%
+  ggplot(aes(x = declared_client, y = percent, fill = collection)) +
+  geom_col(position = "dodge") +
+  scale_fill_manual(values = c(myred, myyellow), name = "Collection slots") +
+  ggtitle("Percentage of subset aggregates among included aggregates") +
+  xlab("Declared client") +
+  ylab("Percentage of subset aggregates in block")
+```
+
+Progress was made over time! To repeat: subset aggregates bring zero extra information on validator votes, and thus can (and should) be dropped entirely when recognised as such.
+
+## Head and target correctness per client
+
+We now look at how correct the clients are at finding the target of the FFG vote and the head of the chain according to the LMD-GHOST fork choice rule, again between epochs 20,000 and 20,160 (slot 640,000 to slot 645,151).
+
+```{r}
+block_root_at_slot <- get_block_root_at_slot(all_bxs)
+correctness_data <- get_correctness_data(
+  all_ats %>%
+    .[att_slot >= start_epoch * slots_per_epoch & att_slot < (end_epoch + 1) * slots_per_epoch],
+  block_root_at_slot
+) %>%
+  get_exploded_ats() %>%
+  .[attested==1, .(att_slot, committee_index, index_in_committee, correct_target, correct_head)] %>%
+  unique() %>%
+  merge(committees) %>%
+  merge(client_per_validator %>%
+          .[, .(proposer_index, declared_client)],
+        by.x = c("validator_index"), by.y = c("proposer_index"))
 ```
 
 ```{r}
-true_all_bxs <- fread(here::here("rds_data/all_bxs.csv")) %>%
-  filter(slot < 608000) %>%
-  select(slot, parent_root, state_root, proposer_index, graffiti, declared_client) %>%
-  union(fread(here::here("per_epoch/all_bxs-19000-19700.csv"))) %>%
-  union(all_bxs)
+correctness_data %>%
+  .[declared_client!="lodestar", .(percent_correct_head=mean(correct_head) * 100,
+        percent_correct_target=mean(correct_target) * 100),
+    by=declared_client] %>%
+  pivot_longer(-declared_client) %>%
+  ggplot(aes(x = declared_client, y = value, fill = name)) +
+  geom_col(position = "dodge") +
+  scale_fill_manual(values = c(myred, myyellow), name = "Attribute", labels = c("Correct head", "Correct target")) +
+  ggtitle("Percentage of correct vote attributes per client") +
+  xlab("Declared client") +
+  ylab("Percentage of correct votes")
 ```
 
-```{r}
-client_per_validator <- true_all_bxs %>%
-  group_by(proposer_index, declared_client) %>%
-  summarise(client_count = n()) %>%
-  group_by(proposer_index) %>%
-  filter(client_count == max(client_count)) %>%
-  rename(validator_index = proposer_index)
-```
+## Gaps between blocks
 
-### Gaps between blocks
-
-We look at the gap (in slots) between two consecutive blocks. The longer the gap is, the more attestations we expect the next block to carry, as evidenced by the boxplots below.
+We look at the gap (in slots) between two consecutive blocks.
 
 ```{r}
 all_bxs %>%
-  select(slot) %>%
-  mutate(last_block_slot = lag(slot)) %>%
-  drop_na() %>%
-  mutate(time_passed = slot - last_block_slot,
-         time_passed = as_factor(time_passed)) %>%
-  inner_join(
+  .[order(slot), .(slot,last_block_slot=shift(slot, n=1, fill=NA, type="lag"))] %>%
+  .[!is.na(last_block_slot), .(slot,time_passed=slot-last_block_slot)] %>%
+  .[time_passed > 0,] %>%
+  merge(
     all_ats %>%
-      group_by(slot) %>%
-      summarise(n = n())
+      .[,.(n=.N),by=slot] %>%
+      .[n <= 128]
   ) %>%
+  mutate(time_passed = as_factor(time_passed)) %>%
   ggplot() +
   geom_boxplot(aes(x = time_passed, y = n)) +
   ggtitle("") +
@@ -128,68 +371,7 @@ all_bxs %>%
   ylab("Included aggregates")
 ```
 
-### Correlated client failures
-
-We plot the latest epochs on the x-axis and align validators on the y-axis. Green cells show epochs where the validator attested, and red cells where they didn't. Note that the client is obtained from the graffiti (either from the POAP tag or if the client name is in the graffiti).
-
-```{r}
-# attestation_grid <- (start_epoch:end_epoch) %>%
-#   map(function(epoch) {
-#     print(str_c("Epoch ", epoch, " until epoch ", end_epoch))
-#     get_exploded_ats(all_ats, epoch) %>%
-#       filter(value) %>%
-#       unique() %>%
-#       mutate(attested = 1) %>%
-#       merge(get_committee(epoch)) %>%
-#       select(validator_index, attested) %>%
-#       distinct() %>%
-#       merge(client_per_validator, all.y = TRUE) %>%
-#       setnafill("const", 0, cols = c("attested")) %>%
-#       mutate(epoch = epoch)
-#   }) %>%
-#   bind_rows()
-```
-
-```{r}
-library(patchwork)
-l = list()
-
-for (client in c("prysm", "lighthouse", "nimbus", "teku")) {
-  attestation_grid_per_client <- attestation_grid %>%
-    filter(epoch < 19810, epoch >= 19701) %>%
-    filter(declared_client == client) %>%
-    group_by(validator_index) %>%
-    filter(sum(attested) > 0) %>%
-    mutate(validator_index = as_factor(validator_index),
-           attested = as_factor(attested))
-  
-  p <- attestation_grid_per_client %>%
-    ggplot() +
-    geom_tile(aes(x = epoch, y = validator_index, fill = attested)) +
-    scale_fill_manual(values = c(myred, mygreen)) +
-    facet_wrap(vars(declared_client)) +
-    theme(axis.text.y=element_blank(),
-          axis.ticks.y=element_blank())
-  
-  l[[client]] <- p
-}
-
-l[["prysm"]] + l[["lighthouse"]] + l[["nimbus"]] + l[["teku"]]
-```
-
-```{r}
-fwrite(all_ats, here::here("per_epoch/all_ats-19701-19810.csv"))
-fwrite(all_bxs, here::here("per_epoch/all_bxs-19701-19810.csv"))
-fwrite(attestation_grid, here::here("per_epoch/att_grid-19701-19810.csv"))
-```
-
-
-
-
-
-
-
-
+The longer the gap is, the more attestations we expect the next block to carry, as evidenced by the boxplots above. The thick line is the median number of attestations included, with the top and bottom ends of the box representing respectively the 25th and 75th quantiles.
 
 
 
