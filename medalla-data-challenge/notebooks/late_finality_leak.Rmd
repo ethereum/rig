@@ -58,10 +58,25 @@ mygreen <- "#BFCE80"
 slots_per_epoch <- 32
 ```
 
+```{r eval=FALSE}
+all_bxs <- add_bxs(all_bxs, 20160, 20400)
+all_bxs %>% fwrite(here::here("rds_data/all_bxs.csv"))
+```
+
+```{r eval=FALSE}
+all_ats <- add_ats(fread(here::here("rds_data/all_ats_post_leak.csv")), 20160, 20400)
+all_ats %>% fwrite(here::here("rds_data/all_ats_post_leak.csv"))
+```
+
+```{r eval=FALSE}
+committees <- add_committees(committees, 20160, 20400)
+committees %>% fwrite(here::here("rds_data/committees_19900-20400.csv"))
+```
+
 ```{r cache=TRUE}
 all_ats <- fread(here::here("rds_data/all_ats_post_leak.csv"))
-all_bxs <- fread(here::here("rds_data/all_bxs.csv")) %>%
-  mutate(declared_client = find_client(graffiti))
+all_bxs <- fread(here::here("rds_data/all_bxs.csv"))
+committees <- fread(here::here("rds_data/committees_19900-20400.csv"))
 ```
 
 ```{r cache=TRUE}
@@ -73,12 +88,6 @@ client_per_validator <- all_bxs %>%
 # client_per_validator <- all_bxs %>%
 #   .[, .(client_count = .N), by=.(proposer_index, declared_client)] %>%
 #   .[, .SD[which.max(client_count)], by=proposer_index]
-```
-
-```{r cache=TRUE}
-committees <- 19900:20160 %>%
-  map(function(epoch) { get_committees(epoch) }) %>%
-  rbindlist()
 ```
 
 We look at statistics from recent epochs of Medalla.
@@ -134,9 +143,10 @@ plot_grid <- function(start_epoch, end_epoch, committees) {
       theme(axis.text.y=element_blank(),
             axis.ticks.y=element_blank(),
             panel.background=element_rect(fill=myred, colour=myred),
-            axis.title.x = element_text(size = 8),
-            axis.title.y = element_text(size = 8),
-            axis.text.x = element_text(size = 8))
+            axis.title.x = element_text(size = 7),
+            axis.title.y = element_text(size = 7),
+            axis.text.x = element_text(size = 7),
+            strip.text = element_text(size = 8))
     
     l[[client]] <- p
   }
@@ -145,32 +155,54 @@ plot_grid <- function(start_epoch, end_epoch, committees) {
 }
 ```
 
-### Epoch 19,900 to 19,999
+<!-- ### Epoch 19,900 to 19,999 -->
 
-```{r, layout="l-screen", fig.height=2}
-plot_grid(19900, 19999, committees)
-```
+<!-- ```{r, layout="l-screen", fig.height=2} -->
+<!-- plot_grid(19900, 19999, committees) -->
+<!-- ``` -->
 
 ### Epoch 20,000 to 20,999
+
+A moment in time, between `r get_date_from_epoch(20000)` and `r get_date_from_epoch(20099)`.
 
 ```{r, layout="l-screen", fig.height=2}
 plot_grid(20000, 20099, committees)
 ```
 
-### Epoch 20,100 to 20,160
+### Epoch 20,100 to 20,199
+
+A moment in time, between `r get_date_from_epoch(20100)` and `r get_date_from_epoch(20199)`.
 
 ```{r, layout="l-screen", fig.height=2}
-plot_grid(20100, 20160, committees)
+plot_grid(20100, 20199, committees)
+```
+
+### Epoch 20,200 to 20,299
+
+A moment in time, between `r get_date_from_epoch(20200)` and `r get_date_from_epoch(20299)`.
+
+```{r, layout="l-screen", fig.height=2}
+plot_grid(20200, 20299, committees)
+```
+
+### Epoch 20,300 to 20,399
+
+A moment in time, between `r get_date_from_epoch(20300)` and `r get_date_from_epoch(20399)`.
+
+```{r, layout="l-screen", fig.height=2}
+plot_grid(20300, 20399, committees)
 ```
 
 ### Potential staking activity
 
-If we wanted to, could we finalise? We look at the attesting record of validators between epochs 20000 and 20160. We define a validator as _potentially active_ if the validator attested at least once during this period **and** their exit epoch is beyond epoch 20160. _Active_ validators are validators who are still expected to attest -- regardless of whether they were recognised as potentially active or not. They are detected as validators whose exit epoch is beyond 20160.
+```{r}
+start_epoch <- 20300
+end_epoch <- 20400
+```
+
+If we wanted to, could we finalise? We look at the attesting record of validators between epochs `r start_epoch` and `r end_epoch`. We define a validator as _potentially active_ if the validator attested at least once during this period **and** their exit epoch is beyond epoch `r end_epoch`. _Active_ validators are validators who are still expected to attest -- regardless of whether they were recognised as potentially active or not. They are detected as validators whose exit epoch is beyond `r end_epoch`.
 
 ```{r cache=TRUE}
-start_epoch <- 20000
-end_epoch <- 20160
-
 # Who has attested in the last x epochs?
 potential_stake <- all_ats %>%
   .[att_slot >= start_epoch * slots_per_epoch & att_slot < (end_epoch + 1) * slots_per_epoch] %>%
@@ -188,11 +220,11 @@ We first measure the _potential weight_, the sum of effective balances of all po
 
 ```{r}
 w_potential_stake <- potential_stake %>%
-  .[attested == 1 & exit_epoch > 20160] %>%
+  .[attested == 1 & exit_epoch > end_epoch] %>%
   .[, .(active_stake=sum(effective_balance))] %>%
   pull(active_stake) %>% pluck(1)
 
-tibble(potential_stake = w_potential_stake) %>%
+tibble(`Potential weight` = w_potential_stake) %>%
   paged_table()
 ```
 
@@ -200,18 +232,18 @@ We then look at the _active weight_, the sum of effective balances of all active
 
 ```{r}
 w_active_stake <- potential_stake %>%
-  .[slashed == 0 & exit_epoch > 20160] %>%
+  .[slashed == 0 & exit_epoch > end_epoch] %>%
   .[, .(active_stake=sum(effective_balance))] %>%
   pull(active_stake) %>% pluck(1)
 
-tibble(active_stake = w_active_stake) %>%
+tibble(`Active weight` = w_active_stake) %>%
   paged_table()
 ```
 
 Getting the ratio between the two, we can get an idea of the highest participation rate we can expect.
 
 ```{r}
-tibble(potential_participation = round(w_potential_stake / w_active_stake * 100, digits = 2)) %>%
+tibble(`Potential participation` = round(w_potential_stake / w_active_stake * 100, digits = 2)) %>%
   paged_table()
 ```
 
@@ -317,7 +349,12 @@ Progress was made over time! To repeat: subset aggregates bring zero extra infor
 
 ## Head and target correctness per client
 
-We now look at how correct the clients are at finding the target of the FFG vote and the head of the chain according to the LMD-GHOST fork choice rule, again between epochs 20,000 and 20,160 (slot 640,000 to slot 645,151).
+```{r}
+start_epoch <- 20000
+end_epoch <- 24000
+```
+
+We now look at how correct the clients are at finding the target of the FFG vote and the head of the chain according to the LMD-GHOST fork choice rule, again between epochs `r start_epoch` and `r end_epoch` (slot `r start_epoch * slots_per_epoch` to slot `r (end_epoch + 1) * slots_per_epoch - 1`).
 
 ```{r}
 block_root_at_slot <- get_block_root_at_slot(all_bxs)

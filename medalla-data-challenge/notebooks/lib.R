@@ -5,8 +5,18 @@ library(httr)
 library(jsonlite)
 library(vroom)
 library(zoo)
+library(lubridate)
 
 slots_per_epoch <- 32
+medalla_genesis <- 1596546008
+
+get_date_from_epoch <- function(epoch) {
+  return(as_datetime(epoch * slots_per_epoch * 12 + medalla_genesis))
+}
+
+get_epoch_from_timestamp <- function(timestamp) {
+  return((timestamp - medalla_genesis) / (slots_per_epoch * 12))
+}
 
 write_all_ats <- function() {
   (1:429) %>%
@@ -20,6 +30,37 @@ write_all_bxs <- function() {
     map(function(b) { fread(here::here(str_c("data/blocks_", b, ".csv"))) }) %>%
     rbindlist() %>%
     fwrite(here::here("rds_data/all_bxs.csv"))
+}
+
+add_bxs <- function(all_bxs, start_epoch, end_epoch) {
+  list(all_bxs %>%
+         .[slot < start_epoch * slots_per_epoch],
+       start_epoch:end_epoch %>%
+         map(function(epoch) { get_blocks(epoch) }) %>%
+         rbindlist()
+  ) %>%
+    rbindlist()
+}
+
+add_ats <- function(all_ats, start_epoch, end_epoch) {
+  list(all_ats %>%
+         .[slot < start_epoch * slots_per_epoch],
+       start_epoch:end_epoch %>%
+         map(function(epoch) { get_attestations(epoch) }) %>%
+         rbindlist()
+  ) %>%
+    rbindlist()
+}
+
+add_committees <- function(committees, start_epoch, end_epoch) {
+  list(
+    committees %>%
+      .[att_slot < start_epoch * slots_per_epoch],
+    start_epoch:end_epoch %>%
+      map(function(epoch) { get_committees(epoch) }) %>%
+      rbindlist()
+  ) %>%
+    rbindlist()
 }
 
 batch_ops <- function(df, fn, filter_fn = NULL, batch_size = 1e4) {
@@ -156,16 +197,17 @@ get_attestations_in_slot <- function(slot) {
            attesting_indices, source_epoch = data.source.epoch,
            source_block_root,
            target_epoch = data.target.epoch,
-           target_block_root)
+           target_block_root) %>%
+    as.data.table()
 }
 
 get_attestations <- function(epoch) {
-  print(str_c("Getting attestations for epoch ", epoch))
+  # print(str_c("Getting attestations for epoch ", epoch))
   start_slot <- epoch * slots_per_epoch
   end_slot <- (epoch + 1) * slots_per_epoch - 1
   start_slot:end_slot %>%
     map(get_attestations_in_slot) %>%
-    as.data.table()
+    rbindlist()
 }
 
 get_exploded_ats <- function(all_ats) {
@@ -225,25 +267,33 @@ get_block_at_slot <- function(slot) {
     return(NULL)
   }
   
+  block_root <- GET(str_c("http://localhost:5052/eth/v1/beacon/blocks/", slot, "/root"))$content %>%
+    rawToChar() %>%
+    fromJSON() %>%
+    .$data %>%
+    .$root
+  
   return(
     tibble(
-      slot = slot,
+      block_root = str_trunc(block_root, 12, "left", ellipsis = ""),
       parent_root = str_trunc(t$parent_root, 12, "left", ellipsis = ""),
       state_root = str_trunc(t$state_root, 12, "left", ellipsis = ""),
+      slot = slot,
       proposer_index = as.numeric(t$proposer_index),
       graffiti = tolower(hex2string(t$body$graffiti)),
     ) %>%
-      mutate(declared_client = find_client(graffiti))
+      mutate(declared_client = find_client(graffiti)) %>%
+      as.data.table()
   )
 }
 
 get_blocks <- function(epoch) {
-  print(str_c("Getting blocks of epoch ", epoch))
+  # print(str_c("Getting blocks of epoch ", epoch))
   start_slot <- epoch * slots_per_epoch
   end_slot <- (epoch + 1) * slots_per_epoch - 1
   start_slot:end_slot %>%
     map(get_block_at_slot) %>%
-    as.data.table()
+    rbindlist()
 }
 
 get_block_root_at_slot <- function(all_bxs) {
@@ -416,7 +466,8 @@ count_weakly_clashing <- function(si) {
 #       return(NULL)
 #     }
 #     df %>%
-#       group_by(slot, att_slot, committee_index, beacon_block_root, source_block_root, target_block_root) %>%
+# group_by(slot, att_slot, committee_index,
+# beacon_block_root, source_block_root, target_block_root) %>%
 #       nest() %>%
 #       mutate(includes = map(data, compare_ats),
 #              n_subset = map(includes, count_subset) %>% unlist(),
