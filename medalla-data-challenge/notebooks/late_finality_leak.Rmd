@@ -59,17 +59,17 @@ slots_per_epoch <- 32
 ```
 
 ```{r eval=FALSE}
-all_bxs <- add_bxs(all_bxs, 20160, 20400)
+all_bxs <- add_bxs(all_bxs, 20401, 20480)
 all_bxs %>% fwrite(here::here("rds_data/all_bxs.csv"))
 ```
 
 ```{r eval=FALSE}
-all_ats <- add_ats(fread(here::here("rds_data/all_ats_post_leak.csv")), 20160, 20400)
+all_ats <- add_ats(fread(here::here("rds_data/all_ats_post_leak.csv")), 20401, 20480)
 all_ats %>% fwrite(here::here("rds_data/all_ats_post_leak.csv"))
 ```
 
 ```{r eval=FALSE}
-committees <- add_committees(committees, 20160, 20400)
+committees <- add_committees(committees, 20401, 20480)
 committees %>% fwrite(here::here("rds_data/committees_19900-20400.csv"))
 ```
 
@@ -123,6 +123,7 @@ client_per_validator %>%
 We plot the latest epochs on the x-axis and align validators on the y-axis. Green cells show epochs where the validator attested, and red cells where they didn't. Note that the client is obtained from the graffiti (either from the POAP tag or if the client name is in the graffiti).
 
 ```{r}
+client <- "nimbus"
 plot_grid <- function(start_epoch, end_epoch, committees) {
   attestation_grid <- all_ats %>%
     .[att_slot >= start_epoch * slots_per_epoch & att_slot < (end_epoch + 1) * slots_per_epoch,
@@ -165,49 +166,76 @@ plot_grid <- function(start_epoch, end_epoch, committees) {
 }
 ```
 
-<!-- ### Epoch 19,900 to 19,999 -->
-
-<!-- ```{r, layout="l-screen", fig.height=2} -->
-<!-- plot_grid(19900, 19999, committees) -->
-<!-- ``` -->
-
-### Epoch 20,000 to 20,099
-
-A moment in time, between `r get_date_from_epoch(20000)` and `r get_date_from_epoch(20099)`.
-
-```{r, layout="l-screen", fig.height=2}
-plot_grid(20000, 20099, committees)
+```{r}
+start_epoch <- 20000
+end_epoch <- 20099
 ```
 
-### Epoch 20,100 to 20,199
+### Epoch `r start_epoch` to `r end_epoch`
 
-A moment in time, between `r get_date_from_epoch(20100)` and `r get_date_from_epoch(20199)`.
+A moment in time, between `r get_date_from_epoch(start_epoch)` and `r get_date_from_epoch(end_epoch + 1)`.
 
 ```{r, layout="l-screen", fig.height=2}
-plot_grid(20100, 20199, committees)
+plot_grid(start_epoch, end_epoch, committees)
 ```
 
-### Epoch 20,200 to 20,299
-
-A moment in time, between `r get_date_from_epoch(20200)` and `r get_date_from_epoch(20299)`.
-
-```{r, layout="l-screen", fig.height=2}
-plot_grid(20200, 20299, committees)
+```{r}
+start_epoch <- 20100
+end_epoch <- 20199
 ```
 
-### Epoch 20,300 to 20,399
+### Epoch `r start_epoch` to `r end_epoch`
 
-A moment in time, between `r get_date_from_epoch(20300)` and `r get_date_from_epoch(20399)`.
+A moment in time, between `r get_date_from_epoch(start_epoch)` and `r get_date_from_epoch(end_epoch + 1)`.
 
 ```{r, layout="l-screen", fig.height=2}
-plot_grid(20300, 20399, committees)
+plot_grid(start_epoch, end_epoch, committees)
+```
+
+```{r}
+start_epoch <- 20200
+end_epoch <- 20299
+```
+
+### Epoch `r start_epoch` to `r end_epoch`
+
+A moment in time, between `r get_date_from_epoch(start_epoch)` and `r get_date_from_epoch(end_epoch + 1)`.
+
+```{r, layout="l-screen", fig.height=2}
+plot_grid(start_epoch, end_epoch, committees)
+```
+
+```{r}
+start_epoch <- 20300
+end_epoch <- 20399
+```
+
+### Epoch `r start_epoch` to `r end_epoch`
+
+A moment in time, between `r get_date_from_epoch(start_epoch)` and `r get_date_from_epoch(end_epoch + 1)`.
+
+```{r, layout="l-screen", fig.height=2}
+plot_grid(start_epoch, end_epoch, committees)
+```
+
+```{r}
+start_epoch <- 20400
+end_epoch <- 20480
+```
+
+### Epoch `r start_epoch` to `r end_epoch`
+
+A moment in time, between `r get_date_from_epoch(start_epoch)` and `r get_date_from_epoch(end_epoch + 1)`.
+
+```{r, layout="l-screen", fig.height=2}
+plot_grid(start_epoch, end_epoch, committees)
 ```
 
 ### Potential staking activity
 
 ```{r}
-start_epoch <- 20300
-end_epoch <- 20400
+start_epoch <- 20280
+end_epoch <- 20480
 ```
 
 If we wanted to, could we finalise? We look at the attesting record of validators between epochs `r start_epoch` and `r end_epoch`. We define a validator as _potentially active_ if the validator attested at least once during this period **and** their exit epoch is beyond epoch `r end_epoch`. _Active_ validators are validators who are still expected to attest -- regardless of whether they were recognised as potentially active or not. They are detected as validators whose exit epoch is beyond `r end_epoch`.
