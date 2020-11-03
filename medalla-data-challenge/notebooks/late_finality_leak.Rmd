@@ -234,7 +234,7 @@ plot_grid(start_epoch, end_epoch, committees)
 ### Potential staking activity
 
 ```{r}
-start_epoch <- 20280
+start_epoch <- 20380
 end_epoch <- 20480
 ```
 
@@ -270,7 +270,7 @@ We then look at the _active weight_, the sum of effective balances of all active
 
 ```{r}
 w_active_stake <- potential_stake %>%
-  .[slashed == 0 & exit_epoch > end_epoch] %>%
+  .[exit_epoch > end_epoch & activation_epoch <= start_epoch,] %>%
   .[, .(active_stake=sum(effective_balance))] %>%
   pull(active_stake) %>% pluck(1)
 
@@ -285,7 +285,7 @@ tibble(`Potential participation` = round(w_potential_stake / w_active_stake * 10
   paged_table()
 ```
 
-Uh oh. We need that number to get above 66.66%.
+We need that number to be above 66.66%.
 
 ## Subset and clashing aggregations per client
 
