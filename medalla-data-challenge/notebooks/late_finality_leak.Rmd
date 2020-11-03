@@ -90,7 +90,7 @@ client_per_validator <- all_bxs %>%
 #   .[, .SD[which.max(client_count)], by=proposer_index]
 ```
 
-We look at statistics from recent epochs of Medalla.
+We look at statistics from recent epochs of Medalla. If you haven't, check out our first [exploratory notebook](https://ethereum.github.io/rig/medalla-data-challenge/notebooks/explore.html) on Medalla data.
 
 <aside>
 You can find [the source of this notebook](https://github.com/ethereum/rig/blob/master/medalla-data-challenge/notebooks/late_finality_leak.Rmd) over at the RIG repository. The code to [generate the datasets](https://github.com/ethereum/rig/blob/master/medalla-data-challenge/notebooks/lib.R) is also available.
@@ -107,6 +107,16 @@ Additionally, we make available a list associating the validator indices to thei
 <aside>
 Missing validator indices in the list correspond to validators who never produced a canonical block.
 </aside>
+
+```{r}
+client_per_validator %>%
+  .[, .(count=.N), by=declared_client] %>%
+  ggplot() +
+  geom_col(aes(x = declared_client, y = count), fill = myred) +
+  ggtitle("Distribution of clients in the dataset") +
+  xlab("Declared client") +
+  ylab("Count")
+```
 
 ## Attester duties fulfilled by validators with declared clients
 
@@ -131,7 +141,7 @@ plot_grid <- function(start_epoch, end_epoch, committees) {
   for (client in c("prysm", "lighthouse", "nimbus", "teku")) {
     attestation_grid_per_client <- attestation_grid %>%
       .[epoch <= end_epoch & epoch >= start_epoch & declared_client == client] %>%
-      mutate(validator_index = as_factor(validator_index),
+      mutate(validator_index = as.factor(validator_index),
              attested = as_factor(attested))
     
     p <- attestation_grid_per_client %>%
@@ -161,7 +171,7 @@ plot_grid <- function(start_epoch, end_epoch, committees) {
 <!-- plot_grid(19900, 19999, committees) -->
 <!-- ``` -->
 
-### Epoch 20,000 to 20,999
+### Epoch 20,000 to 20,099
 
 A moment in time, between `r get_date_from_epoch(20000)` and `r get_date_from_epoch(20099)`.
 
@@ -356,7 +366,7 @@ end_epoch <- 24000
 
 We now look at how correct the clients are at finding the target of the FFG vote and the head of the chain according to the LMD-GHOST fork choice rule, again between epochs `r start_epoch` and `r end_epoch` (slot `r start_epoch * slots_per_epoch` to slot `r (end_epoch + 1) * slots_per_epoch - 1`).
 
-```{r}
+```{r cache=TRUE}
 block_root_at_slot <- get_block_root_at_slot(all_bxs)
 correctness_data <- get_correctness_data(
   all_ats %>%
