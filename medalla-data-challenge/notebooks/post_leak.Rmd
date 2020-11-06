@@ -99,7 +99,6 @@ plot_grid <- function(start_epoch, end_epoch, committees) {
     .[att_slot >= start_epoch * slots_per_epoch & att_slot < (end_epoch + 1) * slots_per_epoch,
       .(att_slot, committee_index, attesting_indices)] %>%
     get_exploded_ats() %>%
-    .[attested == 1,] %>%
     merge(committees,
           by.x = c("att_slot", "committee_index", "index_in_committee"),
           by.y = c("att_slot", "committee_index", "index_in_committee")) %>%

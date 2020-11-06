@@ -20,19 +20,12 @@ description: |
 
 ```{r setup, include=FALSE}
 library(tidyverse)
-library(glue)
-library(RPostgres)
-library(DBI)
 library(ineq)
-library(PKI)
 library(rmarkdown)
 library(zoo)
 library(data.table)
 
 source(here::here("notebooks/lib.R"))
-source(here::here("notebooks/pw.R"))
-
-con <- dbConnect(RPostgres::Postgres(), user="chain", password=pw)
 
 options(digits=10)
 options(scipen = 999) 
@@ -85,41 +78,6 @@ all_ats <- fread(here::here("rds_data/all_ats.csv")) %>%
   .[slot <= until_slot,]
 ```
 
-```{r}
-all_vs <- fread(here::here("rds_data/all_vs.csv"))
-```
-
-<!-- ```{r} -->
-<!-- all_dps <- fread(here::here("rds_data/all_dps.csv")) %>% -->
-<!--   .[deposit_slot <= until_slot,] -->
-<!-- ``` -->
-
-```{r}
-capture_balances <- function(df) {
-  df %>%
-    select(epoch = f_epoch, validator_index = f_validator_index,
-           balance = f_balance, effective_balance = f_effective_balance) %>%
-    mutate_all(as.numeric)
-}
-
-val_balances <- dbGetQuery(
-  con, str_c("SELECT * FROM t_validator_balances WHERE f_epoch = ", until_epoch)) %>%
-  capture_balances() %>%
-  as.data.table()
-
-initial_balances <- dbGetQuery(
-  con, "SELECT * FROM t_validator_balances WHERE f_epoch = 0"
-) %>%
-  capture_balances() %>%
-  as.data.table()
-
-# val_balances <- dbFetch(res, n = 1000) %>% capture_balances()
-# while(!dbHasCompleted(res)) {
-#   val_balances <- val_balances %>%
-#     bind_rows(dbFetch(res, n = 1000) %>% capture_balances())
-# }
-```
-
 In this notebook we explore data from the [Medalla testnet](https://ethereum.org/en/eth2/get-involved/medalla-data-challenge/). We are looking at the `r (max(all_bxs$slot) + 1)` first slots.
 
 <aside>
@@ -140,6 +98,10 @@ Each row in this dataset corresponds to an aggregate attestation included in a b
 
 ```{r, layout="l-body-outset"}
 all_ats %>%
+  arrange(slot, att_slot, committee_index) %>%
+  select(slot, att_slot, committee_index, beacon_block_root,
+         source_epoch, source_block_root, target_epoch, target_block_root,
+         attesting_indices) %>%
   head() %>%
   paged_table()
 ```
@@ -149,8 +111,12 @@ all_ats %>%
 We cast the dataset above into a long format, such that each row corresponds to an individual attestation included in a block. Note that when this individual attestation is included multiple times over multiple aggregates, it appears multiple times in the dataset.
 
 ```{r, layout="l-body-outset"}
-fread(here::here("rds_data/exploded_ats_0.csv")) %>%
-  arrange(att_slot, committee_index, index_in_committee) %>%
+all_ats %>%
+  .[att_slot <= 0,] %>%
+  get_exploded_ats() %>%
+  select(slot, att_slot, committee_index, index_in_committee, beacon_block_root,
+         source_epoch, source_block_root, target_epoch, target_block_root) %>% 
+  arrange(att_slot, committee_index, index_in_committee, slot) %>%
   head() %>%
   paged_table()
 ```
@@ -160,32 +126,29 @@ fread(here::here("rds_data/exploded_ats_0.csv")) %>%
 `exploded_ats` is the "disaggregated" version of the aggregate attestations. To check for validator performance, we often don't need to check for every inclusion of their individual attestations. `individual_ats` contains these unique, individual attestations, tagged with some extra data such as their earliest inclusion and whether they attested correctly for the target checkpoint and the head.
 
 ```{r, layout="l-body-outset"}
-fread(here::here("rds_data/individual_ats_0.csv")) %>%
+all_ats %>%
+  .[att_slot <= 0,] %>%
+  get_exploded_ats() %>%
+  select(att_slot, committee_index, index_in_committee, beacon_block_root,
+         source_epoch, source_block_root, target_epoch, target_block_root) %>%
+  unique() %>%
   arrange(att_slot, committee_index, index_in_committee) %>%
   head() %>%
   paged_table()
 ```
 
-### Weald dump
+### Stateful data
 
-[Jim McDonald](https://twitter.com/AttestantIO), from Attestant, kindly provided a treasure trove of data on the #medalla-data-challenge channel of the EthStaker Discord server. The two previous datasets could have legitimately been mined from Jim's data, but we like to get our hands dirty.
+In a previous version of this notebook, we've made use of [Jim McDonald](https://twitter.com/AttestantIO)'s treasure trove of data, posted on the #medalla-data-challenge channel of the EthStaker Discord server. The data was obtained from his [chaind](https://github.com/wealdtech/chaind) tool, which listens for a beacon node and outputs its data to a PostgreSQL database. It's a great tool and the data is super useful.
+
+We've since adopted a different approach, getting the data "stateful" data (committees, validator balances...) from a request to our node. By setting [Lighthouse to record the state often enough](https://lighthouse-book.sigmaprime.io/advanced_database.html), these requests are fast to execute.
 
 #### `all_cms`
 
-Not too dirty though: obtaining the past record of committees (which validators are supposed to attend when) is much more computationally intensive, since it requires access to past states. Yet given that we have `r until_epoch` epochs in our dataset and a maximum of `r all_vs %>% nrow()` validators, a dataset compiling all committee assignments would have `r until_epoch * (all_vs %>% nrow())` rows, which is too much. When we need committee information, we'll pull it from the database and record intermediary datasets instead.
-
-<aside>
-Note that you can obtain past states from the [Lighthouse block exporter](https://github.com/barnabemonnot/lighthouse_block_export) too, but still need to compute the committees from them.
-</aside>
+Committees are groups of validators asked to produce an attestation for a specific slot. An active validator is a member of exactly one committee per epoch.
 
 ```{r, layout="l-body-outset"}
-dbGetQuery(
-  con,
-  str_c(
-    "SELECT * FROM t_beacon_committees WHERE f_slot >= 0 AND f_slot < 1"
-  )
-) %>%
-  capture_committee() %>%
+get_committees(0) %>%
   head() %>%
   paged_table()
 ```
@@ -199,7 +162,8 @@ Rewards are not given out at the end of genesis epoch, so the balance would only
 </aside>
 
 ```{r, layout="l-body-outset"}
-val_balances %>%
+all_vs <- get_validators(12125)
+get_validators(2) %>%
   head() %>%
   paged_table()
 ```
@@ -385,26 +349,6 @@ fread(here::here("rds_data/stats_per_slot.csv")) %>%
   ylim(0, 100)
 ```
 
-<!-- ### Justification and finalisation -->
-
-```{r}
-# all_cms %>%
-#   left_join(
-#     correct_target_ats %>%
-#       distinct() %>%
-#       select(att_slot, committee_index, index_in_committee) %>%
-#       mutate(voted = 1),
-#     by = c("att_slot" = "att_slot", "committee_index" = "committee_index", "index_in_committee" = "index_in_committee")
-#   ) %>%
-#   replace_na(list(voted = 0)) %>%
-#   inner_join(val_balances,
-#              by = c("epoch" = "epoch", "validator_index" = "validator_index")) %>%
-#   mutate(effective_balance = effective_balance / (1e9)) %>%
-#   group_by(epoch) %>%
-#   summarise(attested_stake = sum(voted * effective_balance),
-#             percent_attested = sum(voted * balance) / sum(balance))
-```
-
 ## Validator performance
 
 Validators are rewarded for their performance, and penalised for failing to complete their tasks. We start with a crude measure of performance: the number of included attestations. It is a crude measure since (a) we do not discount the timeliness of the validator, measured by the inclusion delay and (b) we do not check that the attestation's attributes are correct (with the exception of the `source` attribute, since an incorrect source cannot possibly be included on-chain).
@@ -432,56 +376,9 @@ included_ats_per_val <- fread(here::here("rds_data/stats_per_val.csv")) %>%
 ```
 
 ```{r}
-# Doesn't work, we are missing deposits, e.g., from block 150495
-#
-# deposits_per_val <- all_dps %>%
-#   merge(all_vs %>% select(validator_index, activation_epoch)) %>%
-#   filter(activation_epoch == 0) %>%
-#   group_by(validator_index) %>%
-#   summarise(extra_balance = sum(amount)) %>%
-#   union(
-#     all_dps %>%
-#       merge(all_vs %>% select(validator_index, activation_epoch)) %>%
-#       filter(activation_epoch != 0) %>%
-#       group_by(validator_index) %>%
-#       summarise(extra_balance = sum(amount) - 32 * (10 ^ 9))
-#   ) %>%
-#   union(
-#     initial_balances %>%
-#       mutate(extra_balance = balance - 32 * (10 ^ 9)) %>%
-#       select(validator_index, extra_balance) %>%
-#       arrange(desc(extra_balance))
-#   ) %>%
-#   group_by(validator_index) %>%
-#   summarise(extra_balance = sum(extra_balance))
-# 
-# rewards_per_val <- included_ats_per_val %>%
-#   merge(bxs_proposed_per_val, by="validator_index") %>%
-#   merge(all_vs %>% select(validator_index, time_active)) %>%
-#   merge(
-#     deposits_per_val,
-#     by="validator_index",
-#     all.x = TRUE
-#   ) %>%
-#   setnafill(type="const", fill=0, cols=c("extra_balance")) %>%
-#   merge(
-#     val_balances,
-#     by = c("validator_index" = "validator_index")
-#   ) %>%
-#   mutate(
-#     true_balance = balance - extra_balance,
-#     balance_diff = (true_balance - 32 * (10 ^ 9)) / balance * 100 * epochs_per_year / time_active
-#   )
-```
-
-```{r}
 rewards_per_val <- included_ats_per_val %>%
   merge(bxs_proposed_per_val, by="validator_index") %>%
-  merge(all_vs %>% select(validator_index, time_active)) %>%
-  merge(
-    val_balances,
-    by = c("validator_index" = "validator_index")
-  ) %>%
+  merge(all_vs %>% select(validator_index, time_active, balance)) %>%
   mutate(
     balance = if_else(balance < 16e9, 16e9+1, balance),
     round_balance = round(balance / (32e9)) * 32e9,
@@ -493,8 +390,7 @@ rewards_per_val <- included_ats_per_val %>%
 
 ```{r}
 rewards_per_val %>%
-  filter(abs(balance_diff - mean(rewards_per_val$balance_diff)) <
-           sd(rewards_per_val$balance_diff)) %>%
+  filter(balance_diff < 50, balance_diff > -100) %>%
   mutate(percent_attested = included_ats / (time_active + 1) * 100) %>% {
     ggplot(., aes(x = percent_attested, y = balance_diff)) +
       geom_point(alpha = 0.2, colour = myred) +
@@ -505,6 +401,7 @@ rewards_per_val %>%
       ylab("Annualised reward (%)")
   }
 ```
+
 <aside>
 We only show return rates within one standard deviations of the mean. Very low reward rates are incurred by slashed validators.
 </aside>
@@ -513,8 +410,7 @@ Who are the validators getting a negative return? We plot the same, showing how 
 
 ```{r}
 uptime_rewards <- rewards_per_val %>%
-  filter(abs(balance_diff - mean(rewards_per_val$balance_diff)) <
-           sd(rewards_per_val$balance_diff)) %>%
+  filter(balance_diff < 50, balance_diff > -100) %>%
   mutate(percent_attested = included_ats / (time_active + 1) * 100) %>%
   left_join(
     fread(here::here("rds_data/stats_per_val.csv")) %>%
@@ -540,7 +436,7 @@ Recently activated validators have a much more balanced uptime-reward curve, wit
 ```{r}
 cut_off <- 3500
 uptime_rewards %>%
-  mutate(`Activation epoch` = if_else(time_active > (12125 - cut_off),
+  mutate(`Activation epoch` = if_else(time_active > (until_epoch - cut_off),
                                       str_c("Early validators (activation before epoch ", cut_off, ")"),
                                       str_c("Late validators (activation after epoch ", cut_off, ")"))) %>%
   ggplot() +
@@ -565,7 +461,7 @@ We turn our attention to the inclusion delay. Validators are rewarded for attest
 
 ```{r}
 n_individual_ats <- readRDS(here::here("rds_data/n_individual_ats.rds"))
-readRDS(here::here("rds_data/inclusion_delay_hist.rds")) %>%
+fread(here::here("rds_data/inclusion_delay_hist.csv")) %>%
   ggplot() +
   geom_col(aes(x = inclusion_delay, y = count), fill="steelblue") +
   scale_y_log10() +
@@ -581,7 +477,8 @@ How is the inclusion delay correlated with the rewards? We look at validators wi
 
 ```{r}
 fread(here::here("rds_data/stats_per_val.csv")) %>%
-  merge(rewards_per_val %>% as.data.table(),
+  merge(rewards_per_val %>%
+  filter(balance_diff < 50, balance_diff > -100) %>% as.data.table(),
         by=c("validator_index", "included_ats")) %>%
   .[time_active < 7000,] %>%
   .[included_ats > 0.7 * max(included_ats) & balance_diff < 100,] %>% {
@@ -623,6 +520,8 @@ When we have $N$ active validators, about $N / 32$ are selected to attest for ea
 ### How many individual attestations are contained in aggregates?
 
 ```{r message=FALSE}
+all_ats[, contained_ats:=str_count(attesting_indices, "1")]
+
 all_ats %>%
   .[, .(count=.N), by=contained_ats] %>%
   ggplot() +
@@ -702,7 +601,7 @@ We have `r round(n_individual_ats / n_aggregates, digits = 2)` times more indivi
 We look at all _individual_ attestations in our dataset, i.e., individual, unaggregated votes, and measure how many times they were included in an aggregate.
 
 ```{r}
-readRDS(here::here("rds_data/appearances_in_aggs.rds")) %>%
+fread(here::here("rds_data/appearances_in_aggs.csv")) %>%
   ggplot() +
   geom_col(aes(x = appearances, y = count), fill=myred) +
   scale_y_log10() +
@@ -768,16 +667,7 @@ If we need to produce more heat, we may extend to more slots.
 </aside>
 
 ```{r}
-subset_ats <- (0:299) %>%
-  map(function(batch) {
-    fread(here::here(str_c("rds_data/temp_", batch, ".csv")),
-          colClasses=c("integer", "integer", "integer",
-                       "character","character","character",
-                       "integer", "integer", "integer","integer"))
-  }) %>%
-  bind_rows()
-
-# subset_ats <- fread(here::here("rds_data/subset_ats.csv"))
+subset_ats <- fread(here::here("rds_data/subset_ats_30000.csv"))
 n_aggregates_until <- all_ats %>%
   filter(slot < subset_until_slot) %>%
   nrow()
@@ -884,9 +774,4 @@ Size one aggregates appear often in the dataset.
 | Subset aggregate of size 1 | A subset aggregate which is an unaggregated individual attestation | There are `r n_subset_ind_ats` subset aggregates of size 1 until slot `r subset_until_slot`, `r percent_subset_ind`% of all subset aggregates until slot `r subset_until_slot` | Definitely drop these |
 | Aggregate of size 1 | An individual attestations included without being aggregated | There are `r n_size_1_ags` aggregates of size 1 | Either it is weakly clashing, so aggregate it further; or it is a subset aggregate, so drop it; or it is a redundant |
 :::
-
-```{r}
-# Disconnect from the database
-dbDisconnect(con)
-```
 

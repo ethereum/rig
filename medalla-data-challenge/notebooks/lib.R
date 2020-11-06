@@ -126,7 +126,7 @@ test_ops_ats <- function(fn, dataset = "individual") {
 }
 
 get_committees <- function(epoch) {
-  print(str_c("Getting committee of epoch ", epoch))
+  warning(str_c("Getting committee of epoch ", epoch, "\n"))
   content(GET(str_c("http://localhost:5052/eth/v1/beacon/states/",
             epoch * slots_per_epoch, "/committees/", epoch)))$data %>%
     rbindlist() %>%
@@ -137,14 +137,11 @@ get_committees <- function(epoch) {
 }
 
 get_validators <- function(epoch) {
-  GET(str_c("http://localhost:5052/eth/v1/beacon/states/",
-            epoch * slots_per_epoch, "/validators"))$content %>%
-    rawToChar() %>%
-    fromJSON() %>%
-    .$data %>%
-    .$validator %>%
-    mutate(validator_index = row_number() - 1) %>%
-    select(validator_index, effective_balance, slashed, exit_epoch, activation_epoch) %>%
+  t <- (content(GET(str_c("http://localhost:5052/eth/v1/beacon/states/",
+                    epoch * slots_per_epoch, "/validators")), as="text") %>%
+    fromJSON())$data
+  cbind(t[c("index", "balance")], t$validator) %>%
+    select(validator_index = index, balance, effective_balance, slashed, activation_epoch, exit_epoch) %>%
     mutate_all(as.numeric) %>%
     mutate(time_active = pmin(exit_epoch, epoch) - pmin(epoch, activation_epoch)) %>%
     as.data.table()
@@ -173,12 +170,16 @@ get_attestations <- function(epoch) {
 }
 
 get_exploded_ats <- function(all_ats) {
-  all_ats %>% 
-    .[, agg_index:=.I] %>%
-    .[, .(attested=as.numeric(unlist(strsplit(attesting_indices, "")))),
-      by=setdiff(names(.), "attesting_indices")] %>%
-    .[, index_in_committee:= rowid(agg_index) - 1] %>%
-    return()
+  exploded_ats <- copy(all_ats[att_slot <= 0,])
+  
+  exploded_ats[, agg_index:=.I]
+  exploded_ats <- exploded_ats[
+    , .(attested=as.numeric(unlist(strsplit(attesting_indices, "")))),
+    by=setdiff(names(exploded_ats), "attesting_indices")
+  ]
+  exploded_ats[, index_in_committee:= rowid(agg_index) - 1]
+  
+  return(exploded_ats[attested==1,])
 }
 
 hex2string <- function(string) {
@@ -216,7 +217,6 @@ get_block_at_slot <- function(slot) {
   get_block_and_attestations_at_slot()$block
 }
 
-slot <- 645092
 get_block_and_attestations_at_slot <- function(slot) {
   block <- content(GET(str_c("http://localhost:5052/eth/v1/beacon/blocks/", slot)))$data$message
   
