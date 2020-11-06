@@ -6,6 +6,7 @@ library(jsonlite)
 library(vroom)
 library(zoo)
 library(lubridate)
+library(microbenchmark)
 
 slots_per_epoch <- 32
 medalla_genesis <- 1596546008
@@ -52,14 +53,18 @@ add_ats <- function(all_ats, start_epoch, end_epoch) {
     rbindlist()
 }
 
-add_committees <- function(committees, start_epoch, end_epoch) {
-  list(
-    committees %>%
-      .[att_slot < start_epoch * slots_per_epoch],
-    start_epoch:end_epoch %>%
-      map(function(epoch) { get_committees(epoch) }) %>%
-      rbindlist()
-  ) %>%
+add_bxs_and_ats <- function(start_epoch, end_epoch) {
+  start_epoch:end_epoch %>%
+    map(function(epoch) { get_blocks_and_attestations(epoch) }) %>%
+    reduce(function(a, b) list(
+      blocks = list(a$blocks, b$blocks) %>% rbindlist(),
+      attestations = list(a$attestations, b$attestations) %>% rbindlist()
+    ))
+}
+
+add_committees <- function(start_epoch, end_epoch) {
+  start_epoch:end_epoch %>%
+    map(function(epoch) { get_committees(epoch) }) %>%
     rbindlist()
 }
 
@@ -121,19 +126,14 @@ test_ops_ats <- function(fn, dataset = "individual") {
 }
 
 get_committees <- function(epoch) {
-  # print(str_c("Getting committee of epoch ", epoch))
-  GET(str_c("http://localhost:5052/eth/v1/beacon/states/",
-            epoch * slots_per_epoch, "/committees/", epoch))$content %>%
-    rawToChar() %>%
-    fromJSON() %>%
-    .$data %>%
-    as_tibble() %>%
-    unnest(validators) %>%
+  print(str_c("Getting committee of epoch ", epoch))
+  content(GET(str_c("http://localhost:5052/eth/v1/beacon/states/",
+            epoch * slots_per_epoch, "/committees/", epoch)))$data %>%
+    rbindlist() %>%
     select(att_slot = slot, committee_index = index, validator_index = validators) %>%
     mutate_all(as.numeric) %>%
     group_by(att_slot, committee_index) %>%
-    mutate(index_in_committee = row_number() - 1) %>%
-    ungroup()
+    mutate(index_in_committee = row_number() - 1)
 }
 
 get_validators <- function(epoch) {
@@ -160,49 +160,11 @@ decode_aggregation_bits <- function(ab) {
 }
 
 get_attestations_in_slot <- function(slot) {
-  # print(str_c("Getting attestations in slot ", slot))
-  block_at_slot <- GET(str_c("http://localhost:5052/eth/v1/beacon/blocks/", slot))$content %>%
-    rawToChar() %>%
-    fromJSON() %>%
-    .$data %>%
-    .$message %>%
-    .$slot %>%
-    as.numeric()
-  
-  if (block_at_slot != slot) {
-    return(NULL)
-  }
-  
-  t <- GET(str_c("http://localhost:5052/eth/v1/beacon/blocks/",
-            slot, "/attestations"))$content %>%
-    rawToChar() %>%
-    fromJSON()
-  
-  if (length(t$data) == 0) {
-    return(NULL)
-  }
-  
-  t$data %>%
-    jsonlite::flatten() %>%
-    rowwise() %>%
-    mutate(attesting_indices = decode_aggregation_bits(aggregation_bits)) %>%
-    ungroup() %>%
-    mutate(beacon_block_root = str_trunc(data.beacon_block_root, 12, "left", ellipsis = ""),
-           source_block_root = str_trunc(data.source.root, 12, "left", ellipsis = ""),
-           target_block_root = str_trunc(data.target.root, 12, "left", ellipsis = ""),
-           slot = slot, committee_index = as.numeric(data.index),
-           att_slot = as.numeric(data.slot)) %>%
-    select(slot, att_slot, committee_index,
-           beacon_block_root,
-           attesting_indices, source_epoch = data.source.epoch,
-           source_block_root,
-           target_epoch = data.target.epoch,
-           target_block_root) %>%
-    as.data.table()
+  get_block_and_attestations_at_slot()$attestations
 }
 
 get_attestations <- function(epoch) {
-  # print(str_c("Getting attestations for epoch ", epoch))
+  print(str_c("Getting attestations for epoch ", epoch))
   start_slot <- epoch * slots_per_epoch
   end_slot <- (epoch + 1) * slots_per_epoch - 1
   start_slot:end_slot %>%
@@ -251,44 +213,74 @@ find_client <- function(graffiti) {
 }
 
 get_block_at_slot <- function(slot) {
-  t <- GET(str_c("http://localhost:5052/eth/v1/beacon/blocks/", slot))$content %>%
-    rawToChar() %>%
-    fromJSON() %>%
-    .$data
+  get_block_and_attestations_at_slot()$block
+}
+
+slot <- 645092
+get_block_and_attestations_at_slot <- function(slot) {
+  block <- content(GET(str_c("http://localhost:5052/eth/v1/beacon/blocks/", slot)))$data$message
   
-  if (is.null(t)) {
+  if (as.numeric(block$slot) != slot) {
     return(NULL)
   }
   
-  t <- t %>%
-    .$message
-  
-  if (as.numeric(t$slot) != slot) {
-    return(NULL)
+  if (length(block$body$attestations) == 0) {
+    attestations <- NULL
+  } else {
+    attestations <- block$body$attestations %>%
+      plyr::ldply(data.frame) %>%
+      rowwise() %>%
+      mutate(attesting_indices = decode_aggregation_bits(aggregation_bits)) %>%
+      ungroup() %>%
+      mutate(committee_index = as.numeric(data.index),
+             att_slot = as.numeric(data.slot), slot = slot,
+             beacon_block_root = str_trunc(data.beacon_block_root, 12, "left", ellipsis = ""),
+             source_block_root = str_trunc(data.source.root, 12, "left", ellipsis = ""),
+             target_block_root = str_trunc(data.target.root, 12, "left", ellipsis = ""),
+      ) %>%
+      select(slot, att_slot, committee_index,
+             beacon_block_root,
+             attesting_indices, source_epoch = data.source.epoch,
+             source_block_root,
+             target_epoch = data.target.epoch,
+             target_block_root)
+    setDT(attestations)
   }
   
-  block_root <- GET(str_c("http://localhost:5052/eth/v1/beacon/blocks/", slot, "/root"))$content %>%
-    rawToChar() %>%
-    fromJSON() %>%
-    .$data %>%
-    .$root
+  block_root <- content(GET(str_c("http://localhost:5052/eth/v1/beacon/blocks/", slot, "/root")))$data$root
   
-  return(
-    tibble(
-      block_root = str_trunc(block_root, 12, "left", ellipsis = ""),
-      parent_root = str_trunc(t$parent_root, 12, "left", ellipsis = ""),
-      state_root = str_trunc(t$state_root, 12, "left", ellipsis = ""),
-      slot = slot,
-      proposer_index = as.numeric(t$proposer_index),
-      graffiti = tolower(hex2string(t$body$graffiti)),
-    ) %>%
-      mutate(declared_client = find_client(graffiti)) %>%
-      as.data.table()
+  block <- tibble(
+    block_root = str_trunc(block_root, 12, "left", ellipsis = ""),
+    parent_root = str_trunc(block$parent_root, 12, "left", ellipsis = ""),
+    state_root = str_trunc(block$state_root, 12, "left", ellipsis = ""),
+    slot = slot,
+    proposer_index = as.numeric(block$proposer_index),
+    graffiti = tolower(hex2string(block$body$graffiti)),
+  )
+  setDT(block)
+  
+  list(
+    block = block,
+    attestations = attestations
+  )
+}
+
+get_blocks_and_attestations <- function(epoch) {
+  warning(str_c("Blocks and attestations of epoch ", epoch, "\n"), immediate. = TRUE)
+  start_slot <- epoch * slots_per_epoch
+  end_slot <- (epoch + 1) * slots_per_epoch - 1
+  t <- start_slot:end_slot %>%
+    map(get_block_and_attestations_at_slot) %>%
+    keep(is.list) %>%
+    purrr::transpose()
+  list(
+    blocks = rbindlist(t$block),
+    attestations = rbindlist(t$attestations)
   )
 }
 
 get_blocks <- function(epoch) {
-  # print(str_c("Getting blocks of epoch ", epoch))
+  print(str_c("Getting blocks of epoch ", epoch))
   start_slot <- epoch * slots_per_epoch
   end_slot <- (epoch + 1) * slots_per_epoch - 1
   start_slot:end_slot %>%

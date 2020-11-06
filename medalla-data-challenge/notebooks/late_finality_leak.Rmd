@@ -1,5 +1,5 @@
 ---
-title: "Summer of 15614"
+title: "Late finality leak, epoch 15614 onwards"
 author:
 - name: Barnabé Monnot
   url: https://twitter.com/barnabemonnot
@@ -64,12 +64,12 @@ all_bxs %>% fwrite(here::here("rds_data/all_bxs.csv"))
 ```
 
 ```{r eval=FALSE}
-all_ats <- add_ats(fread(here::here("rds_data/all_ats_post_leak.csv")), 20401, 20480)
+all_ats <- add_ats(fread(here::here("rds_data/all_ats_post_leak.csv")), 15575, 15675)
 all_ats %>% fwrite(here::here("rds_data/all_ats_post_leak.csv"))
 ```
 
 ```{r eval=FALSE}
-committees <- add_committees(committees, 20401, 20480)
+committees <- add_committees(committees, 20481, 20)
 committees %>% fwrite(here::here("rds_data/committees_19900-20400.csv"))
 ```
 
@@ -123,7 +123,6 @@ client_per_validator %>%
 We plot the latest epochs on the x-axis and align validators on the y-axis. Green cells show epochs where the validator attested, and red cells where they didn't. Note that the client is obtained from the graffiti (either from the POAP tag or if the client name is in the graffiti).
 
 ```{r}
-client <- "nimbus"
 plot_grid <- function(start_epoch, end_epoch, committees) {
   attestation_grid <- all_ats %>%
     .[att_slot >= start_epoch * slots_per_epoch & att_slot < (end_epoch + 1) * slots_per_epoch,
@@ -167,11 +166,24 @@ plot_grid <- function(start_epoch, end_epoch, committees) {
 ```
 
 ```{r}
+start_epoch <- 15575
+end_epoch <- 15674
+```
+
+### The leak starts: Epoch `r start_epoch` to `r end_epoch`
+
+A moment in time, between `r get_date_from_epoch(start_epoch)` and `r get_date_from_epoch(end_epoch + 1)`. Finality is achieved for epoch 15614, but no longer after it.
+
+```{r, layout="l-screen", fig.height=2}
+plot_grid(start_epoch, end_epoch, committees)
+```
+
+```{r}
 start_epoch <- 20000
 end_epoch <- 20099
 ```
 
-### Epoch `r start_epoch` to `r end_epoch`
+### Epoch `r start_epoch` to `r end_epoch` (`r start_epoch - 15614` epochs since finality)
 
 A moment in time, between `r get_date_from_epoch(start_epoch)` and `r get_date_from_epoch(end_epoch + 1)`.
 
@@ -212,7 +224,7 @@ end_epoch <- 20399
 
 ### Epoch `r start_epoch` to `r end_epoch`
 
-A moment in time, between `r get_date_from_epoch(start_epoch)` and `r get_date_from_epoch(end_epoch + 1)`.
+A moment in time, between `r get_date_from_epoch(start_epoch)` and `r get_date_from_epoch(end_epoch + 1)`. Notice that when Prsym clients mostly resume their attesting (circa epoch 20330), Teku clients appear to break down (a few epochs after), while Nimbus clients, already stressed also show lots of red.
 
 ```{r, layout="l-screen", fig.height=2}
 plot_grid(start_epoch, end_epoch, committees)
