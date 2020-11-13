@@ -28,7 +28,7 @@ library(data.table)
 source(here::here("notebooks/lib.R"))
 
 options(digits=10)
-options(scipen = 999) 
+options(scipen = 999)
 
 # Make the plots a bit less pixellated
 knitr::opts_chunk$set(dpi = 200)
@@ -58,14 +58,13 @@ mygreen <- "#BFCE80"
 ```
 
 ```{r}
-until_epoch <- 12125
-slot_chunk_res <- 25000
-epoch_resolution <- 12125
-
 slots_per_epoch <- 32
-until_slot <- until_epoch * slots_per_epoch
 slots_per_year <- 365.25 * 24 * 60 * 60 / 12
 epochs_per_year <- slots_per_year / slots_per_epoch
+
+until_epoch <- 12125
+slot_chunk_res <- 25000
+until_slot <- until_epoch * slots_per_epoch
 ```
 
 ```{r}

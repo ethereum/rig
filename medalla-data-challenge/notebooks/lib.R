@@ -8,6 +8,9 @@ library(zoo)
 library(lubridate)
 library(microbenchmark)
 
+options(digits=10)
+options(scipen = 999)
+
 slots_per_epoch <- 32
 medalla_genesis <- 1596546008
 
@@ -126,14 +129,14 @@ test_ops_ats <- function(fn, dataset = "individual") {
 }
 
 get_committees <- function(epoch) {
-  warning(str_c("Getting committee of epoch ", epoch, "\n"))
+  print(str_c("Getting committee of epoch ", epoch, "\n"))
   content(GET(str_c("http://localhost:5052/eth/v1/beacon/states/",
             epoch * slots_per_epoch, "/committees/", epoch)))$data %>%
     rbindlist() %>%
-    select(att_slot = slot, committee_index = index, validator_index = validators) %>%
-    mutate_all(as.numeric) %>%
-    group_by(att_slot, committee_index) %>%
-    mutate(index_in_committee = row_number() - 1)
+    .[,.(att_slot = as.numeric(slot),
+         committee_index = as.numeric(index),
+         validator_index = as.numeric(validators),
+         index_in_committee = rowid(slot, index) - 1)]
 }
 
 get_validators <- function(epoch) {
@@ -170,16 +173,14 @@ get_attestations <- function(epoch) {
 }
 
 get_exploded_ats <- function(all_ats) {
-  exploded_ats <- copy(all_ats[att_slot <= 0,])
-  
-  exploded_ats[, agg_index:=.I]
-  exploded_ats <- exploded_ats[
+  all_ats[, .(slot, att_slot, committee_index, attesting_indices, agg_index = .I)][
     , .(attested=as.numeric(unlist(strsplit(attesting_indices, "")))),
-    by=setdiff(names(exploded_ats), "attesting_indices")
+    by=.(slot, att_slot, committee_index, agg_index)
+  ][
+    , .(slot, att_slot, committee_index, agg_index, index_in_committee = rowid(agg_index) - 1, attested)
+  ][
+    attested == 1,
   ]
-  exploded_ats[, index_in_committee:= rowid(agg_index) - 1]
-  
-  return(exploded_ats[attested==1,])
 }
 
 hex2string <- function(string) {
