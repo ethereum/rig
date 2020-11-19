@@ -267,7 +267,7 @@ get_block_and_attestations_at_slot <- function(slot) {
 }
 
 get_blocks_and_attestations <- function(epoch) {
-  warning(str_c("Blocks and attestations of epoch ", epoch, "\n"), immediate. = TRUE)
+  print(str_c("Blocks and attestations of epoch ", epoch, "\n"))
   start_slot <- epoch * slots_per_epoch
   end_slot <- (epoch + 1) * slots_per_epoch - 1
   t <- start_slot:end_slot %>%
