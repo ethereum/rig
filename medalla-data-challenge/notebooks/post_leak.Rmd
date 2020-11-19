@@ -77,7 +77,7 @@ committees %>% fwrite(here::here("rds_data/committees_post_20481.csv"))
 
 ```{r}
 all_bxs <- fread(here::here("rds_data/all_bxs.csv"))
-all_ats <- fread(here::here("rds_data/all_ats_post_20481.csv"))
+all_ats <- fread(here::here("rds_data/all_ats.csv"))
 committees <- fread(here::here("rds_data/committees_post_20481.csv"))
 ```
 
@@ -201,3 +201,5 @@ A moment in time, between `r get_date_from_epoch(start_epoch)` and `r get_date_f
 ```{r, layout="l-screen", fig.height=2}
 plot_grid(start_epoch, end_epoch, committees)
 ```
+
+
