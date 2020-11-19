@@ -172,15 +172,11 @@ get_attestations <- function(epoch) {
     rbindlist()
 }
 
-get_exploded_ats <- function(all_ats) {
-  all_ats[, .(slot, att_slot, committee_index, attesting_indices, agg_index = .I)][
-    , .(attested=as.numeric(unlist(strsplit(attesting_indices, "")))),
-    by=.(slot, att_slot, committee_index, agg_index)
-  ][
-    , .(slot, att_slot, committee_index, agg_index, index_in_committee = rowid(agg_index) - 1, attested)
-  ][
-    attested == 1,
-  ]
+get_exploded_ats <- function(t) {
+  t[, agg_index := .I]
+  t <- t[, .(attested = as.numeric(unlist(strsplit(attesting_indices, "")))), by=setdiff(names(t), "attesting_indices")]
+  t[, index_in_committee := rowid(agg_index) - 1]
+  return(t[attested == 1, -c("agg_index", "attested")])
 }
 
 hex2string <- function(string) {
@@ -270,14 +266,11 @@ get_blocks_and_attestations <- function(epoch) {
   print(str_c("Blocks and attestations of epoch ", epoch, "\n"))
   start_slot <- epoch * slots_per_epoch
   end_slot <- (epoch + 1) * slots_per_epoch - 1
-  t <- start_slot:end_slot %>%
+  start_slot:end_slot %>%
     map(get_block_and_attestations_at_slot) %>%
     keep(is.list) %>%
-    purrr::transpose()
-  list(
-    blocks = rbindlist(t$block),
-    attestations = rbindlist(t$attestations)
-  )
+    purrr::transpose() %>%
+    map(rbindlist)
 }
 
 get_blocks <- function(epoch) {
@@ -301,26 +294,34 @@ get_block_root_at_slot <- function(all_bxs) {
     as.data.table()
 }
 
-get_correctness_data <- function(all_ats, block_root_at_slot) {
-  all_ats %>%
-    .[, epoch:=att_slot %/% slots_per_epoch] %>%
-    .[, epoch_slot:=epoch * slots_per_epoch] %>%
-    merge(
-      block_root_at_slot %>%
-        .[, .(slot, block_root, correct_target=1)],
-      by.x = c("epoch_slot", "target_block_root"),
-      by.y = c("slot", "block_root"),
-      all.x = TRUE
-    ) %>%
-    .[, `:=`(epoch = NULL, epoch_slot = NULL)] %>%
-    merge(
-      block_root_at_slot %>%
-        .[, .(slot, block_root, correct_head=1)],
-      by.x = c("att_slot", "beacon_block_root"),
-      by.y = c("slot", "block_root"),
-      all.x = TRUE
-    ) %>%
-    setnafill("const", 0, cols=c("correct_target", "correct_head"))
+get_correctness_data <- function(t, block_root_at_slot) {
+  t[, epoch := att_slot %/% slots_per_epoch]
+  t[, epoch_slot := epoch * slots_per_epoch]
+  t[block_root_at_slot, on=c("epoch_slot" = "slot", "target_block_root" = "block_root"), correct_target:=1]
+  t[block_root_at_slot, on=c("att_slot" = "slot", "beacon_block_root" = "block_root"), correct_head:=1]
+  setnafill(t, "const", 0, cols=c("correct_target", "correct_head"))
+  t[, `:=`(epoch = NULL, epoch_slot = NULL)]
+}
+
+get_stats_per_val <- function(all_ats, block_root_at_slot, chunk_size = 100) {
+  min_epoch <- min(all_ats$att_slot) %/% 32
+  max_epoch <- max(all_ats$att_slot) %/% 32
+  seq(min_epoch, max_epoch - chunk_size, chunk_size) %>%
+    map(function(epoch) {
+      print(str_c("Epoch ", epoch))
+      committees <- epoch:(epoch + chunk_size - 1) %>%
+        map(get_committees) %>%
+        rbindlist()
+      t <- copy(all_ats[(att_slot >= epoch * slots_per_epoch) & (att_slot < ((epoch + chunk_size) * slots_per_epoch - 1))])
+      get_correctness_data(t, block_root_at_slot)
+      t <- get_exploded_ats(t)
+      t[, .(att_slot, committee_index, index_in_committee, correct_target, correct_head)] %>%
+        unique() %>%
+        .[committees, on=c("att_slot", "committee_index", "index_in_committee"), nomatch = 0] %>%
+        .[, .(epoch = epoch + chunk_size, included_ats=.N,
+              correct_targets=sum(correct_target), correct_heads=sum(correct_head)), by=validator_index]
+    }) %>%
+    rbindlist()
 }
 
 ### Subset and clashing attestations
