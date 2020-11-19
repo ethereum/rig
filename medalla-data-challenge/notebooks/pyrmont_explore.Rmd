@@ -1,0 +1,191 @@
+---
+title: "Pyrmont data"
+author:
+- name: Barnabé Monnot
+  url: https://twitter.com/barnabemonnot
+  affiliation: Robust Incentives Group, Ethereum Foundation
+  affiliation_url: https://github.com/ethereum/rig
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    toc: yes
+    toc_depth: 3
+  html_document:
+    toc: yes
+    toc_depth: '3'
+    df_print: paged
+description: |
+  Onwards!
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(data.table)
+library(patchwork)
+library(rmarkdown)
+
+source(here::here("notebooks/lib.R"))
+
+options(digits=10)
+options(scipen = 999) 
+
+# Make the plots a bit less pixellated
+knitr::opts_chunk$set(dpi = 300)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+
+# A minimal theme I like
+newtheme <- theme_grey() + theme(
+  axis.text = element_text(size = 9),
+  axis.title = element_text(size = 12),
+  axis.line = element_line(colour = "#000000"),
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  panel.background = element_blank(),
+  legend.title = element_text(size = 12),
+  legend.text = element_text(size = 10),
+  legend.box.background = element_blank(),
+  legend.key = element_blank(),
+  strip.text.x = element_text(size = 10),
+  strip.background = element_rect(fill = "white")
+)
+theme_set(newtheme)
+
+myred <- "#F05431"
+myyellow <- "#FED152"
+mygreen <- "#BFCE80"
+
+slots_per_epoch <- 32
+```
+
+```{r eval=FALSE}
+blx_and_ats <- 0:220 %>%
+  map(get_blocks_and_attestations) %>%
+  purrr::transpose() %>%
+  map(rbindlist)
+```
+
+```{r eval=FALSE}
+all_bxs <- copy(blx_and_ats$block)
+all_bxs[, declared_client := find_client(graffiti)]
+
+all_ats <- copy(blx_and_ats$attestations)
+rm(blx_and_ats)
+```
+
+```{r eval=FALSE}
+committees <- 0:220 %>%
+  map(get_committees) %>%
+  rbindlist()
+```
+
+```{r eval=FALSE}
+all_bxs %>% fwrite(here::here("pyrmont_data/all_bxs.csv"))
+all_ats %>% fwrite(here::here("pyrmont_data/all_ats.csv"))
+committees %>% fwrite(here::here("pyrmont_data/committees.csv"))
+```
+
+```{r}
+all_bxs <- fread(here::here("pyrmont_data/all_bxs.csv"))
+all_ats <- fread(here::here("pyrmont_data/all_ats.csv"))
+committees <- fread(here::here("pyrmont_data/committees.csv"))
+```
+
+```{r}
+client_per_validator <- all_bxs %>%
+  .[, .SD[which.max(slot)], by=proposer_index, .SDcols = c("slot", "declared_client")]
+```
+
+```{r}
+plot_grid <- function(start_epoch, end_epoch, committees = NULL) {
+  if (is.null(committees)) {
+    committees <- start_epoch:end_epoch %>%
+      map(get_committees) %>%
+      rbindlist()
+  }
+  
+  attestation_grid <- all_ats %>%
+    .[att_slot >= start_epoch * slots_per_epoch & att_slot < (end_epoch + 1) * slots_per_epoch,
+      .(att_slot, committee_index, attesting_indices)] %>%
+    get_exploded_ats() %>%
+    merge(committees,
+          by.x = c("att_slot", "committee_index", "index_in_committee"),
+          by.y = c("att_slot", "committee_index", "index_in_committee")) %>%
+    .[,.(att_slot, epoch=att_slot %/% slots_per_epoch, validator_index, attested = 1)] %>%
+    merge(client_per_validator %>%
+            .[, .(proposer_index, declared_client)],
+          by.x = c("validator_index"), by.y = c("proposer_index")) %>%
+    unique()
+  
+  l = list()
+
+  for (client in c("prysm", "lighthouse", "nimbus", "teku")) {
+    attestation_grid_per_client <- attestation_grid %>%
+      .[epoch <= end_epoch & epoch >= start_epoch & declared_client == client] %>%
+      mutate(validator_index = as.factor(validator_index),
+             attested = as_factor(attested))
+    
+    p <- attestation_grid_per_client %>%
+      ggplot() +
+      geom_tile(aes(x = epoch, y = validator_index, fill = attested)) +
+      scale_fill_manual(values = c(mygreen), guide=FALSE) +
+      scale_x_continuous(expand = c(0, 0)) +
+      facet_wrap(vars(declared_client)) +
+      theme(axis.text.y=element_blank(),
+            axis.ticks.y=element_blank(),
+            panel.background=element_rect(fill=myred, colour=myred),
+            axis.title.x = element_text(size = 7),
+            axis.title.y = element_text(size = 7),
+            axis.text.x = element_text(size = 7),
+            strip.text = element_text(size = 8))
+    
+    l[[client]] <- p
+  }
+  
+  l[["prysm"]] | l[["lighthouse"]] | l[["nimbus"]] | l[["teku"]]
+}
+```
+
+We look at data between epochs 0 and 220.
+
+## Finding the declared client
+
+We associate each validator index to a client among Lighthouse, Prysm, Nimbus, Teku and "undecided". To do so, for each canonical block produced, we inspect the graffiti. We associate the block to a client whenever the name of the client features in the graffiti (with a case-insensitive search). When the first four characters of the graffiti are `poap`, we check the last character: when the character is "a", "b", "c", "d" or "e", we guess the client producing the block is (respectively) Prysm, Lighthouse, Teku, Nimbus or Lodestar. Due to the low prevalence of Lodestar blocks, we have decided to remove it from the analysis.
+
+We assume that a validator index is using the latest recorded client obtained from a block produced by that validator.
+
+```{r}
+client_per_validator %>%
+  .[, .(count=.N), by=declared_client] %>%
+  ggplot() +
+  geom_col(aes(x = declared_client, y = count), fill = myred) +
+  ggtitle("Distribution of clients in the dataset") +
+  xlab("Declared client") +
+  ylab("Count")
+```
+
+```{r}
+start_epoch <- 0
+end_epoch <- 99
+```
+
+### Epoch `r start_epoch` to `r end_epoch`
+
+A moment in time, between `r get_date_from_epoch(start_epoch)` and `r get_date_from_epoch(end_epoch + 1)`.
+
+```{r, layout="l-screen", fig.height=2}
+plot_grid(start_epoch, end_epoch, committees)
+```
+
+```{r}
+start_epoch <- 100
+end_epoch <- 219
+```
+
+### Epoch `r start_epoch` to `r end_epoch`
+
+A moment in time, between `r get_date_from_epoch(start_epoch)` and `r get_date_from_epoch(end_epoch + 1)`.
+
+```{r, layout="l-screen", fig.height=2}
+plot_grid(start_epoch, end_epoch, committees)
+```

@@ -131,7 +131,7 @@ test_ops_ats <- function(fn, dataset = "individual") {
 get_committees <- function(epoch) {
   print(str_c("Getting committee of epoch ", epoch, "\n"))
   content(GET(str_c("http://localhost:5052/eth/v1/beacon/states/",
-            epoch * slots_per_epoch, "/committees/", epoch)))$data %>%
+            epoch * slots_per_epoch, "/committees")))$data %>%
     rbindlist() %>%
     .[,.(att_slot = as.numeric(slot),
          committee_index = as.numeric(index),
@@ -453,34 +453,23 @@ count_weakly_clashing <- function(si) {
     return()
 }
 
-# t <- batch_ops_per_slot(
-#   all_ats,
-#   function(df) {
-#     if (nrow(df) == 0) {
-#       return(NULL)
-#     }
-#     df %>%
-# group_by(slot, att_slot, committee_index,
-# beacon_block_root, source_block_root, target_block_root) %>%
-#       nest() %>%
-#       mutate(includes = map(data, compare_ats),
-#              n_subset = map(includes, count_subset) %>% unlist(),
-#              n_subset_ind = map(includes, count_subset_ind) %>% unlist(),
-#              n_strongly_clashing = map(includes, count_strongly_clashing) %>% unlist(),
-#              n_weakly_clashing = map(includes, count_weakly_clashing) %>% unlist()) %>%
-#       filter(n_subset > 0 | n_strongly_clashing > 0 | n_weakly_clashing > 0) %>%
-#       select(slot, att_slot, committee_index, beacon_block_root,
-#              source_block_root, target_block_root,
-#              n_subset, n_subset_ind, n_strongly_clashing, n_weakly_clashing) %>%
-#       return()
-#   },
-#   from_slot = 590000,
-#   to_slot = 610000
-# ) %>%
-#   select(slot, att_slot, committee_index, beacon_block_root,
-#          source_block_root, target_block_root,
-#          n_subset, n_subset_ind, n_strongly_clashing, n_weakly_clashing) %>%
-#   union(fread(here::here("rds_data/subset_ats.csv"))) %>%
+get_aggregate_info <- function(all_ats) {
+  all_ats %>%
+    group_by(slot, att_slot, committee_index,
+             beacon_block_root, source_block_root, target_block_root) %>%
+    nest() %>%
+    mutate(includes = map(data, compare_ats),
+           n_subset = map(includes, count_subset) %>% unlist(),
+           n_subset_ind = map(includes, count_subset_ind) %>% unlist(),
+           n_strongly_clashing = map(includes, count_strongly_clashing) %>% unlist(),
+           n_weakly_clashing = map(includes, count_weakly_clashing) %>% unlist()) %>%
+    filter(n_subset > 0 | n_strongly_clashing > 0 | n_weakly_clashing > 0) %>%
+    select(slot, att_slot, committee_index, beacon_block_root,
+           source_block_root, target_block_root,
+           n_subset, n_subset_ind, n_strongly_clashing, n_weakly_clashing)
+}
+
+# get_aggregate_info %>%
 #   fwrite(here::here("rds_data/subset_ats.csv"))
 # 
 # fread(here::here("rds_data/subset_ats_30000.csv")) %>%
