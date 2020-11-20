@@ -56,15 +56,15 @@ myred <- "#F05431"
 myyellow <- "#FED152"
 mygreen <- "#BFCE80"
 
-end_epoch <- 415
+end_epoch <- 470
 slots_per_epoch <- 32
 until_slot <- (end_epoch + 2) * slots_per_epoch - 1
 slot_chunk_res <- until_slot %/% 15
 ```
 
 ```{r eval=FALSE}
-start_epoch <- 366
-end_epoch <- 415
+start_epoch <- 416
+end_epoch <- 470
 
 all_bxs <- fread(here::here("pyrmont_data/all_bxs.csv"))
 all_ats <- fread(here::here("pyrmont_data/all_ats.csv"))
@@ -91,7 +91,7 @@ rm(new_committees)
 ```
 
 ```{r eval=FALSE}
-(1001:2000) %>%
+(5000:10000) %>%
   map(function(current_slot) {
     print(str_c("slot ", current_slot))
     get_aggregate_info(all_ats[slot == current_slot])
@@ -485,7 +485,7 @@ We now define **subset aggregates**. Suppose two aggregates in the same block wi
 Subset aggregates, much like redundant aggregate attestations (equal aggregates included in more than one block of the canonical chain), can be removed from the finalised chain without losing any voting information. In fact, subset aggregates use much less local information than redundant aggregates. To root out subset aggregates, a client simply must ensure that no aggregate it is prepared to include in a block is a subset aggregate of another. Meanwhile, to root out redundant aggregates, a client must check all past blocks (until the inclusion limit of 32 slots) to ensure that it is not including a redundant aggregate. In a sense, subset aggregate are "worse" as they should be easier to root out.
 
 ```{r}
-subset_until_slot <- 1000
+subset_until_slot <- 10000
 ```
 
 So among all included aggregates in blocks, how many are subset aggregates? We count these instances for attestations included in blocks until slot `r subset_until_slot`.
@@ -691,7 +691,7 @@ plot_grid(start_epoch, end_epoch, committees)
 
 ```{r}
 start_epoch <- 400
-end_epoch <- 415
+end_epoch <- 469
 ```
 
 #### Epoch `r start_epoch` to `r end_epoch`
