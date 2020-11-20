@@ -214,27 +214,6 @@ batch_ops_ats(
   pluck(1) %>%
   saveRDS(here::here("rds_data/n_individual_ats.rds"))
 
-# In how many aggregates does an individual attestation appear?
-
-batch_ops_ats(function(df) {
-  df %>%
-    .[, .(appearances=.N),
-      by=.(att_slot, committee_index, index_in_committee,
-           beacon_block_root, source_block_root, target_block_root)] %>%
-    .[, .(count=.N), by=appearances]
-}, dataset = "exploded") %>%
-  .[, .(count=sum(count)), by=.(appearances)] %>%
-  fwrite(here::here("rds_data/appearances_in_aggs.csv"))
-
-# How many redundant aggregate attestations are there?
-
-all_ats %>%
-  .[, .(appearances=.N),
-    by=.(att_slot, committee_index,
-         beacon_block_root, source_block_root, target_block_root, attesting_indices)] %>%
-  .[, .(count=.N), by=.(appearances)] %>%
-  fwrite(here::here("rds_data/redundant_ats.csv"))
-
 # How many times did a block include the exact same aggregate attestation more than once?
 
 all_ats %>%
@@ -263,42 +242,6 @@ batch_ops_ats(function(df) {
 }) %>%
   .[, .(count=sum(count)), by=inclusion_delay] %>%
   fwrite(here::here("rds_data/inclusion_delay_hist.csv"))
-
-# stats_per_val
-
-batch_ops_ats(function(df) {
-  df %>%
-    .[, inclusion_delay:=(min_inclusion_slot-att_slot)] %>%
-    .[, .(
-      count=.N, delay=sum(inclusion_delay),
-      first_att=min(att_slot), last_att=max(att_slot),
-      correct_targets=sum(correct_target), correct_heads=sum(correct_head)
-    ), by=.(validator_index)]
-}) %>%
-  .[, .(
-    avg_delay=(sum(delay) / sum(count)),
-    included_ats=sum(count),
-    first_att=min(first_att), last_att=max(last_att),
-    correct_targets=sum(correct_targets), correct_heads=sum(correct_heads)
-  ), by=.(validator_index)] %>%
-  fwrite(here::here("rds_data/stats_per_val.csv"))
-
-# stats_per_slot
-
-batch_ops_ats(function(df) {
-  df %>%
-    .[, .(
-      included_ats=.N,
-      correct_targets=sum(correct_target),
-      correct_heads=sum(correct_head)
-    ), by=att_slot]
-}) %>%
-  merge(expected_ats %>%
-          group_by(att_slot) %>%
-          summarise(expected_ats = sum(expected_ats)),
-        all.y = TRUE) %>%
-  setnafill(type = "const", fill = 0, cols=c("included_ats", "correct_targets", "correct_heads")) %>%
-  fwrite(here::here("rds_data/stats_per_slot.csv"))
   
   
   

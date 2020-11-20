@@ -13,13 +13,24 @@ options(scipen = 999)
 
 slots_per_epoch <- 32
 medalla_genesis <- 1596546008
+pyrmont_genesis <- 1605700800
 
-get_date_from_epoch <- function(epoch) {
-  return(as_datetime(epoch * slots_per_epoch * 12 + medalla_genesis))
+get_date_from_epoch <- function(epoch, testnet="pyrmont") {
+  if (testnet == "pyrmont") {
+    genesis <- pyrmont_genesis
+  } else {
+    genesis <- medalla_genesis
+  }
+  return(as_datetime(epoch * slots_per_epoch * 12 + genesis))
 }
 
-get_epoch_from_timestamp <- function(timestamp) {
-  return((timestamp - medalla_genesis) / (slots_per_epoch * 12))
+get_epoch_from_timestamp <- function(timestamp, testnet="pyrmont") {
+  if (testnet == "pyrmont") {
+    genesis <- pyrmont_genesis
+  } else {
+    genesis <- medalla_genesis
+  }
+  return((timestamp - genesis) / (slots_per_epoch * 12))
 }
 
 write_all_ats <- function() {
@@ -144,8 +155,8 @@ get_validators <- function(epoch) {
                     epoch * slots_per_epoch, "/validators")), as="text") %>%
     fromJSON())$data
   cbind(t[c("index", "balance")], t$validator) %>%
-    select(validator_index = index, balance, effective_balance, slashed, activation_epoch, exit_epoch) %>%
-    mutate_all(as.numeric) %>%
+    select(validator_index = index, balance, effective_balance, slashed, activation_epoch, exit_epoch, pubkey) %>%
+    mutate(across(-any_of(c("pubkey")), as.numeric)) %>%
     mutate(time_active = pmin(exit_epoch, epoch) - pmin(epoch, activation_epoch)) %>%
     as.data.table()
 }
@@ -324,6 +335,58 @@ get_stats_per_val <- function(all_ats, block_root_at_slot, chunk_size = 100) {
     rbindlist()
 }
 
+get_stats_per_slot <- function(all_ats, committees, chunk_size = 100) {
+  expected_ats <- committees[, .(expected_ats = .N), by=att_slot]
+  min_epoch <- min(all_ats$att_slot) %/% 32
+  max_epoch <- max(all_ats$att_slot) %/% 32
+  seq(min_epoch, max_epoch - chunk_size, chunk_size) %>%
+    map(function(epoch) {
+      print(str_c("Epoch ", epoch))
+      t <- copy(all_ats[(att_slot >= epoch * slots_per_epoch) & (att_slot < ((epoch + chunk_size) * slots_per_epoch - 1))])
+      t <- get_exploded_ats(t)
+      t[, .(att_slot, committee_index, index_in_committee, correct_target, correct_head)] %>%
+        unique() %>%
+        .[, .(included_ats = .N,
+              correct_targets = sum(correct_target),
+              correct_heads = sum(correct_head)), by=att_slot] %>%
+        merge(expected_ats)
+    }) %>%
+    rbindlist()
+}
+
+get_appearances_in_agg <- function(all_ats, chunk_size = 100) {
+  min_epoch <- min(all_ats$att_slot) %/% 32
+  max_epoch <- max(all_ats$att_slot) %/% 32
+  seq(min_epoch, max_epoch - chunk_size, chunk_size) %>%
+    map(function(epoch) {
+      print(str_c("Epoch ", epoch))
+      t <- copy(all_ats[(att_slot >= epoch * slots_per_epoch) & (att_slot < ((epoch + chunk_size) * slots_per_epoch - 1))])
+      t <- get_exploded_ats(t)
+      t[, .(appearances=.N),
+        by=.(att_slot, committee_index, index_in_committee,
+             beacon_block_root, source_block_root, target_block_root)] %>%
+        .[, .(count=.N), by=appearances]
+    }) %>%
+    rbindlist() %>%
+    .[, .(count=sum(count)), by=.(appearances)]
+}
+
+get_myopic_redundant_ats <- function(all_ats) {
+  all_ats %>%
+    .[, .(appearances=.N),
+      by=.(att_slot, committee_index,
+           beacon_block_root, source_block_root, target_block_root, attesting_indices)] %>%
+    .[, .(count=.N), by=.(appearances)]
+}
+
+get_strong_redundant_ats <- function(all_ats) {
+  all_ats %>%
+    .[, .(appearances=.N),
+      by=.(slot, att_slot, committee_index,
+           beacon_block_root, source_block_root, target_block_root, attesting_indices)] %>%
+    .[, .(count=.N), by=.(appearances)]
+}
+
 ### Subset and clashing attestations
 
 # Two attestations, I and J
@@ -454,6 +517,10 @@ count_weakly_clashing <- function(si) {
 }
 
 get_aggregate_info <- function(all_ats) {
+  if (nrow(all_ats) == 0) {
+    return(NULL)
+  }
+  
   all_ats %>%
     group_by(slot, att_slot, committee_index,
              beacon_block_root, source_block_root, target_block_root) %>%
@@ -468,13 +535,3 @@ get_aggregate_info <- function(all_ats) {
            source_block_root, target_block_root,
            n_subset, n_subset_ind, n_strongly_clashing, n_weakly_clashing)
 }
-
-# get_aggregate_info %>%
-#   fwrite(here::here("rds_data/subset_ats.csv"))
-# 
-# fread(here::here("rds_data/subset_ats_30000.csv")) %>%
-#   union(fread(here::here("rds_data/subset_ats_590000+.csv"))) %>%
-#   fwrite(here::here("rds_data/subset_ats.csv"))
-# 
-# # Try that it is correct with a small example
-# t <- tibble(indices = list(c(T,T), c(T,F)))
