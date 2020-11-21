@@ -56,15 +56,15 @@ myred <- "#F05431"
 myyellow <- "#FED152"
 mygreen <- "#BFCE80"
 
-end_epoch <- 600
+end_epoch <- 650
 slots_per_epoch <- 32
 until_slot <- (end_epoch + 2) * slots_per_epoch - 1
 slot_chunk_res <- until_slot %/% 15
 ```
 
 ```{r eval=FALSE}
-start_epoch <- 561
-end_epoch <- 600
+start_epoch <- 601
+end_epoch <- 650
 
 all_bxs <- fread(here::here("pyrmont_data/all_bxs.csv"))
 all_ats <- fread(here::here("pyrmont_data/all_ats.csv"))
@@ -83,7 +83,7 @@ rm(new_bxs)
 list(all_ats, bxs_and_ats$attestations) %>% rbindlist() %>% fwrite(here::here("pyrmont_data/all_ats.csv"))
 rm(bxs_and_ats)
 
-new_committees <- 0:600 %>%
+new_committees <- start_epoch:end_epoch %>%
   map(get_committees) %>%
   rbindlist()
 
@@ -706,6 +706,19 @@ plot_grid(start_epoch, end_epoch, committees)
 ```{r}
 start_epoch <- 500
 end_epoch <- 599
+```
+
+#### Epoch `r start_epoch` to `r end_epoch`
+
+A moment in time, between `r get_date_from_epoch(start_epoch)` and `r get_date_from_epoch(end_epoch + 1)`.
+
+```{r, layout="l-screen", fig.height=2}
+plot_grid(start_epoch, end_epoch, committees)
+```
+
+```{r}
+start_epoch <- 600
+end_epoch <- 649
 ```
 
 #### Epoch `r start_epoch` to `r end_epoch`
