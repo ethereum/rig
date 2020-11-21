@@ -319,7 +319,7 @@ get_stats_per_val <- function(all_ats, block_root_at_slot, chunk_size = 100) {
   max_epoch <- max(all_ats$att_slot) %/% 32
   seq(min_epoch, max_epoch - chunk_size, chunk_size) %>%
     map(function(epoch) {
-      print(str_c("Epoch ", epoch))
+      # print(str_c("Epoch ", epoch))
       committees <- epoch:(epoch + chunk_size - 1) %>%
         map(get_committees) %>%
         rbindlist()
@@ -341,7 +341,7 @@ get_stats_per_slot <- function(all_ats, committees, chunk_size = 100) {
   max_epoch <- max(all_ats$att_slot) %/% 32
   seq(min_epoch, max_epoch - chunk_size, chunk_size) %>%
     map(function(epoch) {
-      print(str_c("Epoch ", epoch))
+      # print(str_c("Epoch ", epoch))
       t <- copy(all_ats[(att_slot >= epoch * slots_per_epoch) & (att_slot < ((epoch + chunk_size) * slots_per_epoch - 1))])
       t <- get_exploded_ats(t)
       t[, .(att_slot, committee_index, index_in_committee, correct_target, correct_head)] %>%
@@ -359,7 +359,7 @@ get_appearances_in_agg <- function(all_ats, chunk_size = 100) {
   max_epoch <- max(all_ats$att_slot) %/% 32
   seq(min_epoch, max_epoch - chunk_size, chunk_size) %>%
     map(function(epoch) {
-      print(str_c("Epoch ", epoch))
+      # print(str_c("Epoch ", epoch))
       t <- copy(all_ats[(att_slot >= epoch * slots_per_epoch) & (att_slot < ((epoch + chunk_size) * slots_per_epoch - 1))])
       t <- get_exploded_ats(t)
       t[, .(appearances=.N),

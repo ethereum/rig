@@ -56,18 +56,19 @@ myred <- "#F05431"
 myyellow <- "#FED152"
 mygreen <- "#BFCE80"
 
-end_epoch <- 560
+end_epoch <- 600
 slots_per_epoch <- 32
 until_slot <- (end_epoch + 2) * slots_per_epoch - 1
 slot_chunk_res <- until_slot %/% 15
 ```
 
 ```{r eval=FALSE}
-start_epoch <- 471
-end_epoch <- 560
+start_epoch <- 561
+end_epoch <- 600
 
 all_bxs <- fread(here::here("pyrmont_data/all_bxs.csv"))
 all_ats <- fread(here::here("pyrmont_data/all_ats.csv"))
+committees <- fread(here::here("pyrmont_data/committees.csv"))
 
 bxs_and_ats <- start_epoch:end_epoch %>%
   map(get_blocks_and_attestations) %>%
@@ -82,7 +83,7 @@ rm(new_bxs)
 list(all_ats, bxs_and_ats$attestations) %>% rbindlist() %>% fwrite(here::here("pyrmont_data/all_ats.csv"))
 rm(bxs_and_ats)
 
-new_committees <- start_epoch:end_epoch %>%
+new_committees <- 0:600 %>%
   map(get_committees) %>%
   rbindlist()
 
@@ -91,9 +92,9 @@ rm(new_committees)
 ```
 
 ```{r eval=FALSE}
-(5000:10000) %>%
+(10001:15000) %>%
   map(function(current_slot) {
-    print(str_c("slot ", current_slot))
+    if (current_slot %% 1000 == 0) { print(str_c("slot ", current_slot)) }
     get_aggregate_info(all_ats[slot == current_slot])
   }) %>%
   bind_rows() %>%
@@ -131,54 +132,6 @@ blocks_with_conflicting_clients <- all_bxs[declared_client != "undecided"] %>%
 ```{r}
 client_per_validator <- all_bxs %>%
   .[, .SD[which.max(slot)], by=proposer_index, .SDcols = c("slot", "declared_client")]
-```
-
-```{r}
-plot_grid <- function(start_epoch, end_epoch, committees = NULL) {
-  if (is.null(committees)) {
-    committees <- start_epoch:end_epoch %>%
-      map(get_committees) %>%
-      rbindlist()
-  }
-  
-  attestation_grid <- all_ats %>%
-    .[att_slot >= start_epoch * slots_per_epoch & att_slot < (end_epoch + 1) * slots_per_epoch,
-      .(att_slot, committee_index, attesting_indices)] %>%
-    get_exploded_ats() %>%
-    merge(committees,
-          by.x = c("att_slot", "committee_index", "index_in_committee"),
-          by.y = c("att_slot", "committee_index", "index_in_committee")) %>%
-    .[,.(att_slot, epoch=att_slot %/% slots_per_epoch, validator_index, attested = 1)] %>%
-    merge(validators[, .(validator_index, declared_client=client)]) %>%
-    unique()
-  
-  l = list()
-
-  for (client in c("prysm", "lighthouse", "nimbus", "teku")) {
-    attestation_grid_per_client <- attestation_grid %>%
-      .[epoch <= end_epoch & epoch >= start_epoch & declared_client == client] %>%
-      mutate(validator_index = as.factor(validator_index),
-             attested = as_factor(attested))
-    
-    p <- attestation_grid_per_client %>%
-      ggplot() +
-      geom_tile(aes(x = epoch, y = validator_index, fill = attested)) +
-      scale_fill_manual(values = c(mygreen), guide=FALSE) +
-      scale_x_continuous(expand = c(0, 0)) +
-      facet_wrap(vars(declared_client)) +
-      theme(axis.text.y=element_blank(),
-            axis.ticks.y=element_blank(),
-            panel.background=element_rect(fill=myred, colour=myred),
-            axis.title.x = element_text(size = 7),
-            axis.title.y = element_text(size = 7),
-            axis.text.x = element_text(size = 7),
-            strip.text = element_text(size = 8))
-    
-    l[[client]] <- p
-  }
-  
-  l[["prysm"]] | l[["lighthouse"]] | l[["nimbus"]] | l[["teku"]]
-}
 ```
 
 We look at data between epochs 0 and `r end_epoch`.
@@ -485,7 +438,7 @@ We now define **subset aggregates**. Suppose two aggregates in the same block wi
 Subset aggregates, much like redundant aggregate attestations (equal aggregates included in more than one block of the canonical chain), can be removed from the finalised chain without losing any voting information. In fact, subset aggregates use much less local information than redundant aggregates. To root out subset aggregates, a client simply must ensure that no aggregate it is prepared to include in a block is a subset aggregate of another. Meanwhile, to root out redundant aggregates, a client must check all past blocks (until the inclusion limit of 32 slots) to ensure that it is not including a redundant aggregate. In a sense, subset aggregate are "worse" as they should be easier to root out.
 
 ```{r}
-subset_until_slot <- 10000
+subset_until_slot <- 15000
 ```
 
 So among all included aggregates in blocks, how many are subset aggregates? We count these instances for attestations included in blocks until slot `r subset_until_slot`.
@@ -635,6 +588,54 @@ all_ats %>%
   ylab("Average number of aggregates")
 ```
 
+```{r}
+plot_grid <- function(start_epoch, end_epoch, committees = NULL) {
+  if (is.null(committees)) {
+    committees <- start_epoch:end_epoch %>%
+      map(get_committees) %>%
+      rbindlist()
+  }
+  
+  attestation_grid <- all_ats %>%
+    .[att_slot >= start_epoch * slots_per_epoch & att_slot < (end_epoch + 1) * slots_per_epoch,
+      .(att_slot, committee_index, attesting_indices)] %>%
+    get_exploded_ats() %>%
+    merge(committees,
+          by.x = c("att_slot", "committee_index", "index_in_committee"),
+          by.y = c("att_slot", "committee_index", "index_in_committee")) %>%
+    .[,.(att_slot, epoch=att_slot %/% slots_per_epoch, validator_index, attested = 1)] %>%
+    merge(validators[, .(validator_index, declared_client=client)]) %>%
+    unique()
+  
+  l = list()
+
+  for (client in c("prysm", "lighthouse", "nimbus", "teku")) {
+    attestation_grid_per_client <- attestation_grid %>%
+      .[epoch <= end_epoch & epoch >= start_epoch & declared_client == client] %>%
+      mutate(validator_index = as.factor(validator_index),
+             attested = as_factor(attested))
+    
+    p <- attestation_grid_per_client %>%
+      ggplot() +
+      geom_tile(aes(x = epoch, y = validator_index, fill = attested)) +
+      scale_fill_manual(values = c(mygreen), guide=FALSE) +
+      scale_x_continuous(expand = c(0, 0)) +
+      facet_wrap(vars(declared_client)) +
+      theme(axis.text.y=element_blank(),
+            axis.ticks.y=element_blank(),
+            panel.background=element_rect(fill=myred, colour=myred),
+            axis.title.x = element_text(size = 7),
+            axis.title.y = element_text(size = 7),
+            axis.text.x = element_text(size = 7),
+            strip.text = element_text(size = 8))
+    
+    l[[client]] <- p
+  }
+  
+  l[["prysm"]] | l[["lighthouse"]] | l[["nimbus"]] | l[["teku"]]
+}
+```
+
 ### Attestations over time
 
 ```{r}
@@ -704,7 +705,7 @@ plot_grid(start_epoch, end_epoch, committees)
 
 ```{r}
 start_epoch <- 500
-end_epoch <- 559
+end_epoch <- 599
 ```
 
 #### Epoch `r start_epoch` to `r end_epoch`
