@@ -56,15 +56,15 @@ myred <- "#F05431"
 myyellow <- "#FED152"
 mygreen <- "#BFCE80"
 
-end_epoch <- 470
+end_epoch <- 560
 slots_per_epoch <- 32
 until_slot <- (end_epoch + 2) * slots_per_epoch - 1
 slot_chunk_res <- until_slot %/% 15
 ```
 
 ```{r eval=FALSE}
-start_epoch <- 416
-end_epoch <- 470
+start_epoch <- 471
+end_epoch <- 560
 
 all_bxs <- fread(here::here("pyrmont_data/all_bxs.csv"))
 all_ats <- fread(here::here("pyrmont_data/all_ats.csv"))
@@ -691,7 +691,20 @@ plot_grid(start_epoch, end_epoch, committees)
 
 ```{r}
 start_epoch <- 400
-end_epoch <- 469
+end_epoch <- 499
+```
+
+#### Epoch `r start_epoch` to `r end_epoch`
+
+A moment in time, between `r get_date_from_epoch(start_epoch)` and `r get_date_from_epoch(end_epoch + 1)`.
+
+```{r, layout="l-screen", fig.height=2}
+plot_grid(start_epoch, end_epoch, committees)
+```
+
+```{r}
+start_epoch <- 500
+end_epoch <- 559
 ```
 
 #### Epoch `r start_epoch` to `r end_epoch`
