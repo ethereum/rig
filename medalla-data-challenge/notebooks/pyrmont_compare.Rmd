@@ -197,7 +197,7 @@ get_reward_timelines <- function(start_epoch, end_epoch, step=25) {
 ### Since genesis
 
 ```{r message=FALSE}
-rr_series <- get_reward_timelines(1, 1090, step=50)
+rr_series <- get_reward_timelines(1, 1101, step=50)
 ```
 
 We first look at the reward rates per client since genesis.
@@ -228,12 +228,12 @@ rr_series %>%
 
 Performing an omnibus test to detect significant difference between any of the four groups, we are unable to find such significance.
 
-### A natural experiment: scaling down nodes
+### Experiment: Scaling down nodes
 
 Around epoch 1020, nodes from regions 1 and 2 were scaled down from t3.xlarge units (4cpu 16GB mem, with unlimited cpu burst) to m5.large units (2cpu, 8GB mem, no burst). We observe a significant loss of performance despite continuous uptime.
 
 ```{r message=FALSE}
-rr_series <- get_reward_timelines(900, 1090, step=10)
+rr_series <- get_reward_timelines(900, 1100, step=10)
 ```
 
 ```{r}
