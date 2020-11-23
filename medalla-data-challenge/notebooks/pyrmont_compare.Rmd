@@ -63,70 +63,71 @@ slots_per_year <- 365.25 * 24 * 60 * 60 / 12
 epochs_per_year <- slots_per_year / slots_per_epoch
 ```
 
-```{r}
+```{r cache=TRUE}
+all_ats <- fread(here::here("pyrmont_data/all_ats.csv"))
+all_bxs <- fread(here::here("pyrmont_data/all_bxs.csv"))
+block_root_at_slot <- get_block_root_at_slot(all_bxs)
 validators <- fread(here::here("pyrmont_data/initial_validators.csv"))
 ```
 
-## Reward rates
-
 ```{r}
-start_epoch <- 675
-end_epoch <- 900
-
-start_balances <- get_balances_active_validators(start_epoch)[
-    validators[node_code > 0, .(validator_index, client, first_digit)], on="validator_index"
-  ] %>%
-  mutate(
-    measurement_epoch = start_epoch
-  ) %>%
-  select(-time_active, -activation_epoch)
-
-end_balances <- get_balances_active_validators(end_epoch)[
-    validators[node_code > 0, .(validator_index, client, first_digit)], on="validator_index"
-  ] %>%
-  mutate(
-    measurement_epoch = end_epoch
-  ) %>%
-  select(-time_active, -activation_epoch)
-
-reward_rates <- start_balances %>%
-  inner_join(end_balances,
-             by = c("validator_index", "client", "first_digit")) %>%
-  mutate(reward_rate = (balance.y - balance.x) / balance.x * 100 * epochs_per_year / (measurement_epoch.y - measurement_epoch.x))
+# start_epoch <- 675
+# end_epoch <- 900
+# 
+# start_balances <- get_balances_active_validators(start_epoch)[
+#     validators[node_code > 0, .(validator_index, client, first_digit)], on="validator_index"
+#   ] %>%
+#   mutate(
+#     measurement_epoch = start_epoch
+#   ) %>%
+#   select(-time_active, -activation_epoch)
+# 
+# end_balances <- get_balances_active_validators(end_epoch)[
+#     validators[node_code > 0, .(validator_index, client, first_digit)], on="validator_index"
+#   ] %>%
+#   mutate(
+#     measurement_epoch = end_epoch
+#   ) %>%
+#   select(-time_active, -activation_epoch)
+# 
+# reward_rates <- start_balances %>%
+#   inner_join(end_balances,
+#              by = c("validator_index", "client", "first_digit")) %>%
+#   mutate(reward_rate = (balance.y - balance.x) / balance.x * 100 * epochs_per_year / (measurement_epoch.y - measurement_epoch.x))
 ```
 
 ```{r}
 # Differences by client
-mean_diff <- reward_rates %>% 
-  filter(client == "lighthouse" | client == "prysm") %>%
-  specify(formula = reward_rate ~ client) %>% 
-  calculate(stat = "diff in means", order = c("lighthouse", "prysm"))
-
-null_distribution <- reward_rates %>% 
-  filter(client == "lighthouse" | client == "prysm") %>%
-  specify(formula = reward_rate ~ client) %>% 
-  hypothesize(null = "independence") %>% 
-  generate(reps = 1000, type = "permute") %>% 
-  calculate(stat = "diff in means", order = c("lighthouse", "prysm"))
-
+# mean_diff <- reward_rates %>% 
+#   filter(client == "lighthouse" | client == "prysm") %>%
+#   specify(formula = reward_rate ~ client) %>% 
+#   calculate(stat = "diff in means", order = c("lighthouse", "prysm"))
+# 
+# null_distribution <- reward_rates %>% 
+#   filter(client == "lighthouse" | client == "prysm") %>%
+#   specify(formula = reward_rate ~ client) %>% 
+#   hypothesize(null = "independence") %>% 
+#   generate(reps = 1000, type = "permute") %>% 
+#   calculate(stat = "diff in means", order = c("lighthouse", "prysm"))
+# 
 # null_distribution %>% 
 #   get_pvalue(obs_stat = mean_diff, direction = "both")
 ```
 
 ```{r}
 # Differences by node region
-mean_diff <- reward_rates %>%
-  mutate(node_group = if_else(first_digit <= 2, "A", "B")) %>%
-  specify(formula = reward_rate ~ node_group) %>% 
-  calculate(stat = "diff in means", order = c("A", "B"))
-
-null_distribution <- reward_rates %>%
-  mutate(node_group = if_else(first_digit <= 2, "A", "B")) %>%
-  specify(formula = reward_rate ~ node_group) %>% 
-  hypothesize(null = "independence") %>% 
-  generate(reps = 1000, type = "permute") %>% 
-  calculate(stat = "diff in means", order = c("A", "B"))
-
+# mean_diff <- reward_rates %>%
+#   mutate(node_group = if_else(first_digit <= 2, "A", "B")) %>%
+#   specify(formula = reward_rate ~ node_group) %>% 
+#   calculate(stat = "diff in means", order = c("A", "B"))
+# 
+# null_distribution <- reward_rates %>%
+#   mutate(node_group = if_else(first_digit <= 2, "A", "B")) %>%
+#   specify(formula = reward_rate ~ node_group) %>% 
+#   hypothesize(null = "independence") %>% 
+#   generate(reps = 1000, type = "permute") %>% 
+#   calculate(stat = "diff in means", order = c("A", "B"))
+# 
 # null_distribution %>% 
 #   get_pvalue(obs_stat = mean_diff, direction = "both")
 ```
@@ -194,9 +195,9 @@ get_reward_timelines <- function(start_epoch, end_epoch, step=25) {
 }
 ```
 
-### Since genesis
+## Reward rates since genesis
 
-```{r message=FALSE}
+```{r cache=TRUE, message=FALSE}
 rr_series <- get_reward_timelines(1, 1101, step=50)
 ```
 
@@ -228,11 +229,11 @@ rr_series %>%
 
 Performing an omnibus test to detect significant difference between any of the four groups, we are unable to find such significance.
 
-### Experiment: Scaling down nodes
+## Experiment: Scaling down nodes
 
 Around epoch 1020, nodes from regions 1 and 2 were scaled down from t3.xlarge units (4cpu 16GB mem, with unlimited cpu burst) to m5.large units (2cpu, 8GB mem, no burst). We observe a significant loss of performance despite continuous uptime.
 
-```{r message=FALSE}
+```{r cache=TRUE, message=FALSE}
 rr_series <- get_reward_timelines(900, 1100, step=10)
 ```
 
@@ -258,5 +259,82 @@ rr_series %>%
   ylab("Average reward rate") +
   ggtitle("Timeline of average rates of reward per client") +
   scale_color_discrete(name = "Client")
+```
+
+### Analysis by duty
+
+```{r cache=TRUE}
+start_epoch <- 950
+end_epoch <- 1100
+chunk_size <- 10
+
+val_series <- get_stats_per_val(
+  all_ats[att_slot >= start_epoch * slots_per_epoch & att_slot < end_epoch * slots_per_epoch],
+  block_root_at_slot, chunk_size = chunk_size)
+```
+
+We look at four metrics across each region:
+
+- Percentage of included attestations.
+- Percentage of correct targets among expected attestations.
+- Percentage of correct heads among expected attestations.
+- Average inclusion delay.
+
+To obtain a time series, we divide the period between epoch `r start_epoch` and epoch `r end_epoch` in chunks of size `r chunk_size` epochs. For each validator, we record how many included attestations appear in the dataset (ranging between 0 and `r chunk_size` for each chunk), the number of correct targets, correct heads and its average inclusion delay. We average over all validators in the EF-controlled set, measuring metrics either per client or per region.
+
+We start by looking at the metrics per region.
+
+```{r, layout="l-screen", fig.height=2}
+val_series[
+  validators[node_code > 0, .(validator_index, client, region=as.character(first_digit))], on="validator_index"
+][
+  , .(
+    included_ats=sum(included_ats)/sum(expected_ats) * 100,
+    correct_targets=sum(correct_targets)/sum(expected_ats) * 100,
+    correct_heads=sum(correct_heads)/sum(expected_ats) * 100,
+    inclusion_delay=mean(inclusion_delay, na.rm = TRUE)
+  ),
+  by=.(epoch, region)
+] %>%
+  melt(id.vars = c("epoch", "region")) %>%
+  ggplot() +
+  geom_line(aes(x = epoch, y = value, group=region, color=region)) +
+  xlab("Epoch") +
+  ylab("Value") +
+  scale_color_discrete(name = "Region") +
+  facet_wrap(vars(variable), nrow=1, scales="free_y") +
+  theme(axis.title.x = element_text(size = 7),
+        axis.title.y = element_text(size = 7),
+        axis.text.x = element_text(size = 7),
+        axis.text.y = element_text(size = 7),
+        strip.text = element_text(size = 8))
+```
+
+And now per client.
+
+```{r, layout="l-screen", fig.height=2}
+val_series[
+  validators[node_code > 0, .(validator_index, client, first_digit)], on="validator_index"
+][
+  , .(
+    included_ats=sum(included_ats)/sum(expected_ats) * 100,
+    correct_targets=sum(correct_targets)/sum(expected_ats) * 100,
+    correct_heads=sum(correct_heads)/sum(expected_ats) * 100,
+    inclusion_delay=mean(inclusion_delay, na.rm = TRUE)
+  ),
+  by=.(epoch, client)
+] %>%
+  melt(id.vars = c("epoch", "client")) %>%
+  ggplot() +
+  geom_line(aes(x = epoch, y = value, group=client, color=client)) +
+  xlab("Epoch") +
+  ylab("Value") +
+  scale_color_discrete(name = "Client") +
+  facet_wrap(vars(variable), nrow=1, scales="free_y") +
+  theme(axis.title.x = element_text(size = 7),
+        axis.title.y = element_text(size = 7),
+        axis.text.x = element_text(size = 7),
+        axis.text.y = element_text(size = 7),
+        strip.text = element_text(size = 8))
 ```
 

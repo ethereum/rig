@@ -140,7 +140,7 @@ test_ops_ats <- function(fn, dataset = "individual") {
 }
 
 get_committees <- function(epoch) {
-  print(str_c("Getting committee of epoch ", epoch, "\n"))
+  # print(str_c("Getting committee of epoch ", epoch, "\n"))
   content(GET(str_c("http://localhost:5052/eth/v1/beacon/states/",
             epoch * slots_per_epoch, "/committees")))$data %>%
     rbindlist() %>%
@@ -321,7 +321,7 @@ get_correctness_data <- function(t, block_root_at_slot) {
   t[, `:=`(epoch = NULL, epoch_slot = NULL)]
 }
 
-get_stats_per_val <- function(all_ats, block_root_at_slot, chunk_size = 100) {
+get_stats_per_val <- function(all_ats, block_root_at_slot, chunk_size = 10) {
   min_epoch <- min(all_ats$att_slot) %/% 32
   max_epoch <- max(all_ats$att_slot) %/% 32
   seq(min_epoch, max_epoch - chunk_size, chunk_size) %>%
@@ -330,14 +330,21 @@ get_stats_per_val <- function(all_ats, block_root_at_slot, chunk_size = 100) {
       committees <- epoch:(epoch + chunk_size - 1) %>%
         map(get_committees) %>%
         rbindlist()
+      validators <- get_validators(epoch + chunk_size - 1)[time_active > 0, .(validator_index, time_active)]
       t <- copy(all_ats[(att_slot >= epoch * slots_per_epoch) & (att_slot < ((epoch + chunk_size) * slots_per_epoch - 1))])
       get_correctness_data(t, block_root_at_slot)
       t <- get_exploded_ats(t)
-      t[, .(att_slot, committee_index, index_in_committee, correct_target, correct_head)] %>%
-        unique() %>%
+      t[, .(inclusion_delay=min(slot)-att_slot),
+        by=.(att_slot, committee_index, index_in_committee, correct_target, correct_head)] %>%
         .[committees, on=c("att_slot", "committee_index", "index_in_committee"), nomatch = 0] %>%
-        .[, .(epoch = epoch + chunk_size, included_ats=.N,
-              correct_targets=sum(correct_target), correct_heads=sum(correct_head)), by=validator_index]
+        .[, .(included_ats=.N,
+              correct_targets=sum(correct_target), correct_heads=sum(correct_head),
+              inclusion_delay=mean(inclusion_delay)), by=validator_index
+        ] %>%
+        .[validators, on=c("validator_index"), nomatch = NA] %>%
+        setnafill("const", 0, cols=c("included_ats", "correct_targets", "correct_heads")) %>%
+        .[, .(validator_index, epoch = epoch + chunk_size, expected_ats=pmin(time_active, chunk_size),
+              included_ats, correct_targets, correct_heads, inclusion_delay)]
     }) %>%
     rbindlist()
 }

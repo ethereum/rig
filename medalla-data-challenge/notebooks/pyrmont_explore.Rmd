@@ -57,7 +57,7 @@ myred <- "#F05431"
 myyellow <- "#FED152"
 mygreen <- "#BFCE80"
 
-end_epoch <- 1020
+end_epoch <- 1100
 slots_per_epoch <- 32
 until_slot <- (end_epoch + 2) * slots_per_epoch - 1
 slot_chunk_res <- until_slot %/% 15
@@ -67,8 +67,8 @@ epochs_per_year <- slots_per_year / slots_per_epoch
 
 ```{r eval=FALSE}
 # Run this to add to the dataset
-start_epoch <- 1021
-end_epoch <- 1090
+start_epoch <- 1091
+end_epoch <- 1100
 
 all_bxs <- fread(here::here("pyrmont_data/all_bxs.csv"))
 all_ats <- fread(here::here("pyrmont_data/all_ats.csv"))
