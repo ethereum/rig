@@ -161,6 +161,13 @@ get_validators <- function(epoch) {
     as.data.table()
 }
 
+get_balances_active_validators <- function(epoch) {
+  get_validators(epoch)[
+    time_active > 0 & exit_epoch > epoch,
+    .(validator_index, balance, time_active, activation_epoch)
+  ]
+}
+
 decode_aggregation_bits <- function(ab) {
   gsub('(..)(?!$)', '\\1,', substring(ab, 3), perl=TRUE) %>%
     str_split(",") %>%

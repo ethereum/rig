@@ -24,6 +24,7 @@ library(data.table)
 library(patchwork)
 library(rmarkdown)
 library(ineq)
+library(infer)
 
 source(here::here("notebooks/lib.R"))
 
@@ -56,15 +57,18 @@ myred <- "#F05431"
 myyellow <- "#FED152"
 mygreen <- "#BFCE80"
 
-end_epoch <- 650
+end_epoch <- 1020
 slots_per_epoch <- 32
 until_slot <- (end_epoch + 2) * slots_per_epoch - 1
 slot_chunk_res <- until_slot %/% 15
+slots_per_year <- 365.25 * 24 * 60 * 60 / 12
+epochs_per_year <- slots_per_year / slots_per_epoch
 ```
 
 ```{r eval=FALSE}
-start_epoch <- 601
-end_epoch <- 650
+# Run this to add to the dataset
+start_epoch <- 1021
+end_epoch <- 1090
 
 all_bxs <- fread(here::here("pyrmont_data/all_bxs.csv"))
 all_ats <- fread(here::here("pyrmont_data/all_ats.csv"))
@@ -718,7 +722,33 @@ plot_grid(start_epoch, end_epoch, committees)
 
 ```{r}
 start_epoch <- 600
-end_epoch <- 649
+end_epoch <- 699
+```
+
+#### Epoch `r start_epoch` to `r end_epoch`
+
+A moment in time, between `r get_date_from_epoch(start_epoch)` and `r get_date_from_epoch(end_epoch + 1)`.
+
+```{r, layout="l-screen", fig.height=2}
+plot_grid(start_epoch, end_epoch, committees)
+```
+
+```{r}
+start_epoch <- 700
+end_epoch <- 799
+```
+
+#### Epoch `r start_epoch` to `r end_epoch`
+
+A moment in time, between `r get_date_from_epoch(start_epoch)` and `r get_date_from_epoch(end_epoch + 1)`.
+
+```{r, layout="l-screen", fig.height=2}
+plot_grid(start_epoch, end_epoch, committees)
+```
+
+```{r}
+start_epoch <- 800
+end_epoch <- 814
 ```
 
 #### Epoch `r start_epoch` to `r end_epoch`

@@ -1,0 +1,262 @@
+---
+title: "Pyrmont client comparison"
+author:
+- name: Barnabé Monnot
+  url: https://twitter.com/barnabemonnot
+  affiliation: Robust Incentives Group, Ethereum Foundation
+  affiliation_url: https://github.com/ethereum/rig
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    toc: yes
+    toc_depth: 3
+  html_document:
+    toc: yes
+    toc_depth: '3'
+    df_print: paged
+description: |
+  Onwards!
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(data.table)
+library(rmarkdown)
+library(infer)
+
+source(here::here("notebooks/lib.R"))
+
+options(digits=10)
+options(scipen = 999) 
+
+# Make the plots a bit less pixellated
+knitr::opts_chunk$set(dpi = 300)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+
+# A minimal theme I like
+newtheme <- theme_grey() + theme(
+  axis.text = element_text(size = 9),
+  axis.title = element_text(size = 12),
+  axis.line = element_line(colour = "#000000"),
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  panel.background = element_blank(),
+  legend.title = element_text(size = 12),
+  legend.text = element_text(size = 10),
+  legend.box.background = element_blank(),
+  legend.key = element_blank(),
+  strip.text.x = element_text(size = 10),
+  strip.background = element_rect(fill = "white")
+)
+theme_set(newtheme)
+
+myred <- "#F05431"
+myyellow <- "#FED152"
+mygreen <- "#BFCE80"
+
+end_epoch <- 1020
+slots_per_epoch <- 32
+until_slot <- (end_epoch + 2) * slots_per_epoch - 1
+slot_chunk_res <- until_slot %/% 15
+slots_per_year <- 365.25 * 24 * 60 * 60 / 12
+epochs_per_year <- slots_per_year / slots_per_epoch
+```
+
+```{r}
+validators <- fread(here::here("pyrmont_data/initial_validators.csv"))
+```
+
+## Reward rates
+
+```{r}
+start_epoch <- 675
+end_epoch <- 900
+
+start_balances <- get_balances_active_validators(start_epoch)[
+    validators[node_code > 0, .(validator_index, client, first_digit)], on="validator_index"
+  ] %>%
+  mutate(
+    measurement_epoch = start_epoch
+  ) %>%
+  select(-time_active, -activation_epoch)
+
+end_balances <- get_balances_active_validators(end_epoch)[
+    validators[node_code > 0, .(validator_index, client, first_digit)], on="validator_index"
+  ] %>%
+  mutate(
+    measurement_epoch = end_epoch
+  ) %>%
+  select(-time_active, -activation_epoch)
+
+reward_rates <- start_balances %>%
+  inner_join(end_balances,
+             by = c("validator_index", "client", "first_digit")) %>%
+  mutate(reward_rate = (balance.y - balance.x) / balance.x * 100 * epochs_per_year / (measurement_epoch.y - measurement_epoch.x))
+```
+
+```{r}
+# Differences by client
+mean_diff <- reward_rates %>% 
+  filter(client == "lighthouse" | client == "prysm") %>%
+  specify(formula = reward_rate ~ client) %>% 
+  calculate(stat = "diff in means", order = c("lighthouse", "prysm"))
+
+null_distribution <- reward_rates %>% 
+  filter(client == "lighthouse" | client == "prysm") %>%
+  specify(formula = reward_rate ~ client) %>% 
+  hypothesize(null = "independence") %>% 
+  generate(reps = 1000, type = "permute") %>% 
+  calculate(stat = "diff in means", order = c("lighthouse", "prysm"))
+
+# null_distribution %>% 
+#   get_pvalue(obs_stat = mean_diff, direction = "both")
+```
+
+```{r}
+# Differences by node region
+mean_diff <- reward_rates %>%
+  mutate(node_group = if_else(first_digit <= 2, "A", "B")) %>%
+  specify(formula = reward_rate ~ node_group) %>% 
+  calculate(stat = "diff in means", order = c("A", "B"))
+
+null_distribution <- reward_rates %>%
+  mutate(node_group = if_else(first_digit <= 2, "A", "B")) %>%
+  specify(formula = reward_rate ~ node_group) %>% 
+  hypothesize(null = "independence") %>% 
+  generate(reps = 1000, type = "permute") %>% 
+  calculate(stat = "diff in means", order = c("A", "B"))
+
+# null_distribution %>% 
+#   get_pvalue(obs_stat = mean_diff, direction = "both")
+```
+
+```{r}
+# pairwise.t.test(reward_rates$reward_rate, reward_rates$client, p.adjust.method = "none")
+```
+
+```{r}
+# reward_rates %>%
+#   group_by(client) %>%
+#   summarise(reward_rate = mean(reward_rate))
+```
+
+```{r}
+# reward_rates %>%
+#   mutate(node_group = if_else(first_digit <= 2, "A", "B")) %>%
+#   group_by(node_group) %>%
+#   summarise(reward_rate = mean(reward_rate))
+```
+
+```{r}
+# pairwise.t.test(reward_rates$reward_rate, reward_rates$first_digit, p.adjust.method = "none")
+```
+
+```{r message=FALSE}
+get_reward_timelines <- function(start_epoch, end_epoch, step=25) {
+  start_balances <- get_balances_active_validators(start_epoch)[
+    validators[node_code > 0, .(validator_index, client, first_digit)], on="validator_index"
+  ] %>%
+    mutate(
+      measurement_epoch = start_epoch
+    ) %>%
+    select(-time_active, -activation_epoch)
+  
+  seq(start_epoch+step, end_epoch+1, step) %>%
+    map(function(epoch) {
+      end_balances <- get_balances_active_validators(epoch)[
+        validators[node_code > 0, .(validator_index, client, first_digit)], on="validator_index"
+      ] %>%
+        mutate(
+          measurement_epoch = epoch
+        ) %>%
+        select(-time_active, -activation_epoch)
+      
+      t <- start_balances %>%
+        inner_join(end_balances,
+                   by = c("validator_index", "client", "first_digit")) %>%
+        mutate(reward_rate = (balance.y - balance.x) / balance.x * 100 * epochs_per_year / (measurement_epoch.y - measurement_epoch.x))
+      rr <- t %>%
+        group_by(group = client, measurement_epoch.y) %>%
+        summarise(avg_rr = mean(reward_rate), n_group = n()) %>%
+        mutate(name = "client") %>%
+        union(
+          t %>%
+            group_by(group = as.character(first_digit), measurement_epoch.y) %>%
+            summarise(avg_rr = mean(reward_rate), n_group = n()) %>%
+            mutate(name = "region")
+        )
+      
+      start_balances <- end_balances
+      return(rr)
+    }) %>%
+    bind_rows()
+}
+```
+
+### Since genesis
+
+```{r message=FALSE}
+rr_series <- get_reward_timelines(1, 1090, step=50)
+```
+
+We first look at the reward rates per client since genesis.
+
+```{r}
+rr_series %>%
+  filter(name == "client") %>%
+  ggplot(aes(x = measurement_epoch.y, y = avg_rr, group=group, color=group)) +
+  geom_line() +
+  xlab("Epoch") +
+  ylab("Average reward rate") +
+  ggtitle("Timeline of average rates of reward per client") +
+  scale_color_discrete(name = "Client")
+```
+
+Clients are hosted on AWS nodes scattered across four regions in roughly equal proportions. We look at the reward rates per region.
+
+```{r}
+rr_series %>%
+  filter(name == "region") %>%
+  ggplot(aes(x = measurement_epoch.y, y = avg_rr, group=group, color=group)) +
+  geom_line() +
+  xlab("Epoch") +
+  ylab("Average reward rate") +
+  ggtitle("Timeline of average rates of reward per region") +
+  scale_color_discrete(name = "Region")
+```
+
+Performing an omnibus test to detect significant difference between any of the four groups, we are unable to find such significance.
+
+### A natural experiment: scaling down nodes
+
+Around epoch 1020, nodes from regions 1 and 2 were scaled down from t3.xlarge units (4cpu 16GB mem, with unlimited cpu burst) to m5.large units (2cpu, 8GB mem, no burst). We observe a significant loss of performance despite continuous uptime.
+
+```{r message=FALSE}
+rr_series <- get_reward_timelines(900, 1090, step=10)
+```
+
+```{r}
+rr_series %>%
+  filter(name == "region") %>%
+  ggplot(aes(x = measurement_epoch.y, y = avg_rr, group=group, color=group)) +
+  geom_line() +
+  xlab("Epoch") +
+  ylab("Average reward rate") +
+  ggtitle("Timeline of average rates of reward per region") +
+  scale_color_discrete(name = "Region")
+```
+
+Reward rates per client are affected in roughly equal proportions.
+
+```{r}
+rr_series %>%
+  filter(name == "client") %>%
+  ggplot(aes(x = measurement_epoch.y, y = avg_rr, group=group, color=group)) +
+  geom_line() +
+  xlab("Epoch") +
+  ylab("Average reward rate") +
+  ggtitle("Timeline of average rates of reward per client") +
+  scale_color_discrete(name = "Client")
+```
+
