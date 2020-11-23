@@ -593,7 +593,7 @@ all_ats %>%
 ```
 
 ```{r}
-plot_grid <- function(start_epoch, end_epoch, committees = NULL) {
+get_attestation_grid <- function(start_epoch, end_epoch, committees = NULL) {
   if (is.null(committees)) {
     committees <- start_epoch:end_epoch %>%
       map(get_committees) %>%
@@ -610,30 +610,35 @@ plot_grid <- function(start_epoch, end_epoch, committees = NULL) {
     .[,.(att_slot, epoch=att_slot %/% slots_per_epoch, validator_index, attested = 1)] %>%
     merge(validators[, .(validator_index, declared_client=client)]) %>%
     unique()
+}
+
+get_grid_per_client <- function(start_epoch, end_epoch, client, attestation_grid) {
+  attestation_grid_per_client <- attestation_grid %>%
+    .[epoch <= end_epoch & epoch >= start_epoch & declared_client == client] %>%
+    mutate(validator_index = as.factor(validator_index),
+           attested = as_factor(attested))
+  
+  attestation_grid_per_client %>%
+    ggplot() +
+    geom_tile(aes(x = epoch, y = validator_index, fill = attested)) +
+    scale_fill_manual(values = c(mygreen), guide=FALSE) +
+    scale_x_continuous(expand = c(0, 0)) +
+    theme(axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+          panel.background=element_rect(fill=myred, colour=myred),
+          axis.title.x = element_text(size = 7),
+          axis.title.y = element_text(size = 7),
+          axis.text.x = element_text(size = 7),
+          strip.text = element_text(size = 8))
+}
+
+plot_grid <- function(start_epoch, end_epoch, committees = NULL) {
+  attestation_grid <- get_attestation_grid(start_epoch, end_epoch, committees)
   
   l = list()
 
   for (client in c("prysm", "lighthouse", "nimbus", "teku")) {
-    attestation_grid_per_client <- attestation_grid %>%
-      .[epoch <= end_epoch & epoch >= start_epoch & declared_client == client] %>%
-      mutate(validator_index = as.factor(validator_index),
-             attested = as_factor(attested))
-    
-    p <- attestation_grid_per_client %>%
-      ggplot() +
-      geom_tile(aes(x = epoch, y = validator_index, fill = attested)) +
-      scale_fill_manual(values = c(mygreen), guide=FALSE) +
-      scale_x_continuous(expand = c(0, 0)) +
-      facet_wrap(vars(declared_client)) +
-      theme(axis.text.y=element_blank(),
-            axis.ticks.y=element_blank(),
-            panel.background=element_rect(fill=myred, colour=myred),
-            axis.title.x = element_text(size = 7),
-            axis.title.y = element_text(size = 7),
-            axis.text.x = element_text(size = 7),
-            strip.text = element_text(size = 8))
-    
-    l[[client]] <- p
+    l[[client]] <- get_grid_per_client(start_epoch, end_epoch, client, attestation_grid)
   }
   
   l[["prysm"]] | l[["lighthouse"]] | l[["nimbus"]] | l[["teku"]]
@@ -642,121 +647,34 @@ plot_grid <- function(start_epoch, end_epoch, committees = NULL) {
 
 ### Attestations over time
 
-```{r}
+```{r cache=TRUE, cache.lazy=FALSE}
 start_epoch <- 0
-end_epoch <- 99
+end_epoch <- 1100
+
+attestation_grid <- get_attestation_grid(start_epoch, end_epoch, committees = committees)
 ```
 
-#### Epoch `r start_epoch` to `r end_epoch`
-
-A moment in time, between `r get_date_from_epoch(start_epoch)` and `r get_date_from_epoch(end_epoch + 1)`.
-
-```{r, cache=TRUE, layout="l-screen", fig.height=2}
-plot_grid(start_epoch, end_epoch, committees)
-```
-
-```{r}
-start_epoch <- 100
-end_epoch <- 199
-```
-
-#### Epoch `r start_epoch` to `r end_epoch`
-
-A moment in time, between `r get_date_from_epoch(start_epoch)` and `r get_date_from_epoch(end_epoch + 1)`.
-
-```{r, cache=TRUE, layout="l-screen", fig.height=2}
-plot_grid(start_epoch, end_epoch, committees)
-```
-
-```{r}
-start_epoch <- 200
-end_epoch <- 299
-```
-
-#### Epoch `r start_epoch` to `r end_epoch`
-
-A moment in time, between `r get_date_from_epoch(start_epoch)` and `r get_date_from_epoch(end_epoch + 1)`.
-
-```{r, cache=TRUE, layout="l-screen", fig.height=2}
-plot_grid(start_epoch, end_epoch, committees)
-```
-
-```{r}
-start_epoch <- 300
-end_epoch <- 399
-```
-
-#### Epoch `r start_epoch` to `r end_epoch`
-
-A moment in time, between `r get_date_from_epoch(start_epoch)` and `r get_date_from_epoch(end_epoch + 1)`.
+#### Lighthouse
 
 ```{r, layout="l-screen", fig.height=2}
-plot_grid(start_epoch, end_epoch, committees)
+get_grid_per_client(start_epoch, end_epoch, "lighthouse", attestation_grid)
 ```
-
-```{r}
-start_epoch <- 400
-end_epoch <- 499
-```
-
-#### Epoch `r start_epoch` to `r end_epoch`
-
-A moment in time, between `r get_date_from_epoch(start_epoch)` and `r get_date_from_epoch(end_epoch + 1)`.
+#### Nimbus
 
 ```{r, layout="l-screen", fig.height=2}
-plot_grid(start_epoch, end_epoch, committees)
+get_grid_per_client(start_epoch, end_epoch, "nimbus", attestation_grid)
 ```
 
-```{r}
-start_epoch <- 500
-end_epoch <- 599
-```
-
-#### Epoch `r start_epoch` to `r end_epoch`
-
-A moment in time, between `r get_date_from_epoch(start_epoch)` and `r get_date_from_epoch(end_epoch + 1)`.
+#### Prysm
 
 ```{r, layout="l-screen", fig.height=2}
-plot_grid(start_epoch, end_epoch, committees)
+get_grid_per_client(start_epoch, end_epoch, "prysm", attestation_grid)
 ```
 
-```{r}
-start_epoch <- 600
-end_epoch <- 699
-```
-
-#### Epoch `r start_epoch` to `r end_epoch`
-
-A moment in time, between `r get_date_from_epoch(start_epoch)` and `r get_date_from_epoch(end_epoch + 1)`.
+#### Teku
 
 ```{r, layout="l-screen", fig.height=2}
-plot_grid(start_epoch, end_epoch, committees)
-```
-
-```{r}
-start_epoch <- 700
-end_epoch <- 799
-```
-
-#### Epoch `r start_epoch` to `r end_epoch`
-
-A moment in time, between `r get_date_from_epoch(start_epoch)` and `r get_date_from_epoch(end_epoch + 1)`.
-
-```{r, layout="l-screen", fig.height=2}
-plot_grid(start_epoch, end_epoch, committees)
-```
-
-```{r}
-start_epoch <- 800
-end_epoch <- 814
-```
-
-#### Epoch `r start_epoch` to `r end_epoch`
-
-A moment in time, between `r get_date_from_epoch(start_epoch)` and `r get_date_from_epoch(end_epoch + 1)`.
-
-```{r, layout="l-screen", fig.height=2}
-plot_grid(start_epoch, end_epoch, committees)
+get_grid_per_client(start_epoch, end_epoch, "teku", attestation_grid)
 ```
 
 ### Subset aggregates
