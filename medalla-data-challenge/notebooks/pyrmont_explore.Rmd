@@ -56,8 +56,10 @@ theme_set(newtheme)
 myred <- "#F05431"
 myyellow <- "#FED152"
 mygreen <- "#BFCE80"
+client_colours <- c("#000011", "#ff9a02", "#eb4a9b", "#7dc19e")
 
-end_epoch <- 1100
+start_epoch <- 0
+end_epoch <- 1250
 slots_per_epoch <- 32
 until_slot <- (end_epoch + 2) * slots_per_epoch - 1
 slot_chunk_res <- until_slot %/% 15
@@ -67,12 +69,13 @@ epochs_per_year <- slots_per_year / slots_per_epoch
 
 ```{r eval=FALSE}
 # Run this to add to the dataset
-start_epoch <- 1091
-end_epoch <- 1100
+start_epoch <- 1241
+end_epoch <- 1250
 
 all_bxs <- fread(here::here("pyrmont_data/all_bxs.csv"))
 all_ats <- fread(here::here("pyrmont_data/all_ats.csv"))
 committees <- fread(here::here("pyrmont_data/committees.csv"))
+val_series <- fread(here::here("pyrmont_data/val_series.csv"))
 
 bxs_and_ats <- start_epoch:end_epoch %>%
   map(get_blocks_and_attestations) %>%
@@ -90,9 +93,16 @@ rm(bxs_and_ats)
 new_committees <- start_epoch:end_epoch %>%
   map(get_committees) %>%
   rbindlist()
-
 list(committees, new_committees) %>% rbindlist() %>% fwrite(here::here("pyrmont_data/committees.csv"))
 rm(new_committees)
+
+block_root_at_slot <- get_block_root_at_slot(fread(here::here("pyrmont_data/all_bxs.csv")))
+all_ats <- fread(here::here("pyrmont_data/all_ats.csv"))
+new_val_series <- get_stats_per_val(
+  all_ats[att_slot >= (start_epoch-1) * slots_per_epoch & att_slot < end_epoch * slots_per_epoch],
+  block_root_at_slot, chunk_size = 10)
+list(val_series, new_val_series) %>% rbindlist() %>% fwrite(here::here("pyrmont_data/val_series.csv"))
+rm(new_val_series)
 ```
 
 ```{r eval=FALSE}
@@ -196,8 +206,6 @@ tibble(slot = 0:until_slot) %>%
   ylab("Percent proposed and included") +
   ylim(0, 100)
 ```
-
-Again, the same trough during the roughtime incident.
 
 ## Correctness of attestations
 
@@ -512,9 +520,7 @@ tibble(Name = c("Weakly clashing aggregates", "Included aggregates", "Percentage
 
 None! That's pretty great. It means blocks always include the most aggregated possible attestations, and we have a local optimum to the aggregation problem.
 
-<aside>
 Note that optimally aggregating a set of aggregates is NP-complete! Here is a reduction of the optimal aggregation problem to the [graph colouring](https://en.wikipedia.org/wiki/Graph_coloring). Set aggregate attestations as vertices in a graph, with an edge drawn between two vertices if the validator sets of the two aggregates have a non-empty overlap. In the graph colouring, we look for the minimum number of colours necessary to assign a colour to each vertex such that two connected vertices do not have the same colour. All vertices who share the same colour have an empty overlap, and thus can be combined into an aggregate. The minimum number of colours necessary to colour the graph tells us how few aggregates were necessary to combine a given set of aggregates further.
-</aside>
 
 ### Aggregates glossary
 
@@ -561,153 +567,3 @@ Size one aggregates appear often in the dataset.
 | Subset aggregate of size 1 | A subset aggregate which is an unaggregated individual attestation | There are `r n_subset_ind_ats` subset aggregates of size 1 until slot `r subset_until_slot`, `r percent_subset_ind`% of all subset aggregates until slot `r subset_until_slot` | Definitely drop these |
 | Aggregate of size 1 | An individual attestations included without being aggregated | There are `r n_size_1_ags` aggregates of size 1 | Either it is weakly clashing, so aggregate it further; or it is a subset aggregate, so drop it; or it is a redundant |
 :::
-
-## Client comparisons
-
-### Client distribution
-
-```{r}
-validators %>%
-  .[, .(count=.N), by=client] %>%
-  ggplot() +
-  geom_col(aes(x = client, y = count), fill = myred) +
-  ggtitle("Distribution of clients in the dataset") +
-  xlab("Declared client") +
-  ylab("Count")
-```
-
-### Aggregates included per block
-
-```{r}
-all_ats %>%
-  .[, .(included_ats = .N), by=slot] %>%
-  merge(all_bxs[, .(slot, proposer_index)]) %>%
-  merge(validators[, .(validator_index, client)],
-        by.x = c("proposer_index"), by.y = c("validator_index")) %>%
-  ggplot(aes(x = client, y = included_ats)) +
-  stat_summary(geom = "bar", fun = mean, fill = myred) +
-  stat_summary(geom = "errorbar", fun.data = mean_se, width = 0.2) +
-  ggtitle("Average number of aggregates included per block") +
-  xlab("Declared client") +
-  ylab("Average number of aggregates")
-```
-
-```{r}
-get_attestation_grid <- function(start_epoch, end_epoch, committees = NULL) {
-  if (is.null(committees)) {
-    committees <- start_epoch:end_epoch %>%
-      map(get_committees) %>%
-      rbindlist()
-  }
-  
-  attestation_grid <- all_ats %>%
-    .[att_slot >= start_epoch * slots_per_epoch & att_slot < (end_epoch + 1) * slots_per_epoch,
-      .(att_slot, committee_index, attesting_indices)] %>%
-    get_exploded_ats() %>%
-    merge(committees,
-          by.x = c("att_slot", "committee_index", "index_in_committee"),
-          by.y = c("att_slot", "committee_index", "index_in_committee")) %>%
-    .[,.(att_slot, epoch=att_slot %/% slots_per_epoch, validator_index, attested = 1)] %>%
-    merge(validators[, .(validator_index, declared_client=client)]) %>%
-    unique()
-}
-
-get_grid_per_client <- function(start_epoch, end_epoch, client, attestation_grid) {
-  attestation_grid_per_client <- attestation_grid %>%
-    .[epoch <= end_epoch & epoch >= start_epoch & declared_client == client] %>%
-    mutate(validator_index = as.factor(validator_index),
-           attested = as_factor(attested))
-  
-  attestation_grid_per_client %>%
-    ggplot() +
-    geom_tile(aes(x = epoch, y = validator_index, fill = attested)) +
-    scale_fill_manual(values = c(mygreen), guide=FALSE) +
-    scale_x_continuous(expand = c(0, 0)) +
-    theme(axis.text.y=element_blank(),
-          axis.ticks.y=element_blank(),
-          panel.background=element_rect(fill=myred, colour=myred),
-          axis.title.x = element_text(size = 7),
-          axis.title.y = element_text(size = 7),
-          axis.text.x = element_text(size = 7),
-          strip.text = element_text(size = 8))
-}
-
-plot_grid <- function(start_epoch, end_epoch, committees = NULL) {
-  attestation_grid <- get_attestation_grid(start_epoch, end_epoch, committees)
-  
-  l = list()
-
-  for (client in c("prysm", "lighthouse", "nimbus", "teku")) {
-    l[[client]] <- get_grid_per_client(start_epoch, end_epoch, client, attestation_grid)
-  }
-  
-  l[["prysm"]] | l[["lighthouse"]] | l[["nimbus"]] | l[["teku"]]
-}
-```
-
-### Attestations over time
-
-```{r cache=TRUE, cache.lazy=FALSE}
-start_epoch <- 0
-end_epoch <- 1100
-
-attestation_grid <- get_attestation_grid(start_epoch, end_epoch, committees = committees)
-```
-
-#### Lighthouse
-
-```{r, layout="l-screen", fig.height=2}
-get_grid_per_client(start_epoch, end_epoch, "lighthouse", attestation_grid)
-```
-#### Nimbus
-
-```{r, layout="l-screen", fig.height=2}
-get_grid_per_client(start_epoch, end_epoch, "nimbus", attestation_grid)
-```
-
-#### Prysm
-
-```{r, layout="l-screen", fig.height=2}
-get_grid_per_client(start_epoch, end_epoch, "prysm", attestation_grid)
-```
-
-#### Teku
-
-```{r, layout="l-screen", fig.height=2}
-get_grid_per_client(start_epoch, end_epoch, "teku", attestation_grid)
-```
-
-### Subset aggregates
-
-Subset aggregates are aggregates included in a block which are fully covered by another aggregate included in the same block. Namely, when aggregate 1 has attesting indices $I$ and aggregate 2 has attesting indices $J$, aggregate 1 is a subset aggregate when $I \subset J$.
-
-```{r}
-all_bxs %>%
-  merge(validators[, .(validator_index, client)],
-        by.x = c("proposer_index"), by.y = c("validator_index")) %>%
-  merge(subset_ats, by.x = c("slot"), by.y = c("slot"), all.x = TRUE) %>%
-  setnafill("const", fill = 0, cols = c("n_subset", "n_subset_ind", "n_weakly_clashing", "n_strongly_clashing")) %>%
-  ggplot(aes(x = client, y = n_subset)) +
-  stat_summary(geom = "bar", fun = mean, fill = myred) +
-  stat_summary(geom = "errorbar", fun.data = mean_se, width = 0.2) +
-  ggtitle("Average number of subset aggregates per block") +
-  xlab("Declared client") +
-  ylab("Average subset aggregates")
-```
-
-```{r}
-all_ats %>%
-  .[, .(included_ats = .N), by=slot] %>%
-  merge(all_bxs[, .(slot, proposer_index)]) %>%
-  merge(validators[, .(validator_index, client)],
-        by.x = c("proposer_index"), by.y = c("validator_index")) %>%
-  merge(subset_ats, by.x = c("slot"), by.y = c("slot"), all.x = TRUE) %>%
-  setnafill("const", fill = 0, cols = c("n_subset", "n_subset_ind", "n_weakly_clashing", "n_strongly_clashing")) %>%
-  group_by(client) %>%
-  summarise(percent = sum(n_subset) / sum(included_ats) * 100) %>%
-  ggplot(aes(x = client, y = percent)) +
-  geom_col(fill = myred) +
-  ggtitle("Percentage of subset aggregates among included aggregates") +
-  xlab("Declared client") +
-  ylab("Percentage of subset aggregates in block")
-```

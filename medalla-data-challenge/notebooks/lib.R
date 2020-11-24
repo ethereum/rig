@@ -324,7 +324,8 @@ get_correctness_data <- function(t, block_root_at_slot) {
 get_stats_per_val <- function(all_ats, block_root_at_slot, chunk_size = 10) {
   min_epoch <- min(all_ats$att_slot) %/% 32
   max_epoch <- max(all_ats$att_slot) %/% 32
-  seq(min_epoch, max_epoch - chunk_size, chunk_size) %>%
+  print(str_c("Min epoch ", min_epoch, ", max epoch ", max_epoch))
+  seq(min_epoch, (max_epoch+1) - chunk_size, chunk_size) %>%
     map(function(epoch) {
       # print(str_c("Epoch ", epoch))
       committees <- epoch:(epoch + chunk_size - 1) %>%
@@ -391,6 +392,20 @@ get_myopic_redundant_ats <- function(all_ats) {
       by=.(att_slot, committee_index,
            beacon_block_root, source_block_root, target_block_root, attesting_indices)] %>%
     .[, .(count=.N), by=.(appearances)]
+}
+
+get_myopic_redundant_ats_detail <- function(all_ats) {
+  all_ats[
+    all_ats[
+      , .(min_slot=min(slot), appearances=.N),
+      by=.(att_slot, committee_index, beacon_block_root, source_block_root, target_block_root, attesting_indices)
+    ][
+      appearances > 1
+    ],
+    on = c("att_slot", "committee_index", "beacon_block_root", "source_block_root", "target_block_root", "attesting_indices")
+  ][
+    slot != min_slot, .(n_myopic_redundant = .N), by = slot
+  ]
 }
 
 get_strong_redundant_ats <- function(all_ats) {
