@@ -484,11 +484,13 @@ val_series[
   ylab("Value") +
   scale_color_discrete(name = "Region") +
   facet_wrap(vars(variable), nrow=1, scales="free_y") +
-  theme(axis.title.x = element_text(size = 7),
-        axis.title.y = element_text(size = 7),
-        axis.text.x = element_text(size = 7),
-        axis.text.y = element_text(size = 7),
-        strip.text = element_text(size = 8))
+  theme(axis.title.x = element_text(size = 6),
+        axis.title.y = element_text(size = 6),
+        axis.text.x = element_text(size = 6),
+        axis.text.y = element_text(size = 6),
+        strip.text = element_text(size = 4),
+        legend.title = element_text(size = 6),
+        legend.text = element_text(size = 6))
 ```
 
 And now per client.
@@ -512,10 +514,12 @@ val_series[
   ylab("Value") +
   scale_color_manual(name = "Client", values = client_colours) +
   facet_wrap(vars(variable), nrow=1, scales="free_y") +
-  theme(axis.title.x = element_text(size = 7),
-        axis.title.y = element_text(size = 7),
-        axis.text.x = element_text(size = 7),
-        axis.text.y = element_text(size = 7),
-        strip.text = element_text(size = 8))
+  theme(axis.title.x = element_text(size = 6),
+        axis.title.y = element_text(size = 6),
+        axis.text.x = element_text(size = 6),
+        axis.text.y = element_text(size = 6),
+        strip.text = element_text(size = 4),
+        legend.title = element_text(size = 6),
+        legend.text = element_text(size = 6))
 ```
 
