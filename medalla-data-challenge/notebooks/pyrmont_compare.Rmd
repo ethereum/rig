@@ -56,7 +56,7 @@ myyellow <- "#FED152"
 mygreen <- "#BFCE80"
 client_colours <- c("#000011", "#ff9a02", "#eb4a9b", "#7dc19e")
 
-end_epoch <- 1250
+end_epoch <- 1520
 slots_per_epoch <- 32
 until_slot <- (end_epoch + 2) * slots_per_epoch - 1
 slot_chunk_res <- until_slot %/% 15
@@ -72,6 +72,7 @@ validators <- fread(here::here("pyrmont_data/initial_validators.csv"))
 all_myopic_redundant_ats <- get_myopic_redundant_ats_detail(all_ats)
 subset_ats <- fread(here::here("pyrmont_data/subset_ats.csv"))
 val_series <- fread(here::here("pyrmont_data/val_series.csv"))
+stats_per_slot <- fread(here::here("pyrmont_data/stats_per_slot.csv"))
 ```
 
 ```{r}
@@ -157,57 +158,30 @@ val_series <- fread(here::here("pyrmont_data/val_series.csv"))
 # pairwise.t.test(reward_rates$reward_rate, reward_rates$first_digit, p.adjust.method = "none")
 ```
 
-```{r message=FALSE}
-get_reward_timelines <- function(start_epoch, end_epoch, step=25) {
-  start_balances <- get_balances_active_validators(start_epoch)[
-    validators[node_code > 0, .(validator_index, client, first_digit)], on="validator_index"
-  ] %>%
-    mutate(
-      measurement_epoch = start_epoch
-    ) %>%
-    select(-time_active, -activation_epoch)
-  
-  seq(start_epoch+step, end_epoch+1, step) %>%
-    map(function(epoch) {
-      end_balances <- get_balances_active_validators(epoch)[
-        validators[node_code > 0, .(validator_index, client, first_digit)], on="validator_index"
-      ] %>%
-        mutate(
-          measurement_epoch = epoch
-        ) %>%
-        select(-time_active, -activation_epoch)
-      
-      t <- start_balances %>%
-        inner_join(end_balances,
-                   by = c("validator_index", "client", "first_digit")) %>%
-        mutate(reward_rate = (balance.y - balance.x) / balance.x * 100 * epochs_per_year / (measurement_epoch.y - measurement_epoch.x))
-      rr <- t %>%
-        group_by(group = client, measurement_epoch.y) %>%
-        summarise(avg_rr = mean(reward_rate), n_group = n()) %>%
-        mutate(name = "client") %>%
-        union(
-          t %>%
-            group_by(group = as.character(first_digit), measurement_epoch.y) %>%
-            summarise(avg_rr = mean(reward_rate), n_group = n()) %>%
-            mutate(name = "region")
-        )
-      
-      start_balances <- end_balances
-      return(rr)
-    }) %>%
-    bind_rows()
-}
-```
+In this report, we focus on the initial set of 99,900 validators controlled by the Ethereum and the client teams. This report was compiled with data until epoch `r end_epoch`.
+
+## High-level insights
+
+- All clients perform generally well, with improvements over the (still short) lifetime of Pyrmont.
+- Attention should be given to epoch processing. We identify from the performance of validator duties (attesting for the correct head) that some clients are late to propose the initial block of a new epoch, and make the hypothesis that this lateness is due to high epoch processing overhead.
+- Block-packing algorithms have improved considerably since Medalla.
+  - Lighthouse has a significantly lower number of attestations in the blocks it produces.
+  - 👍 No client includes any aggregate attestation of size 1 if it is contained in a larger, also included, aggregate.
+  - 👍 Lighthouse and Nimbus have no subset aggregates in their blocks. Prysm and Teku have roughly the same numbers as in Medalla.
+  - 👍 All clients (except Nimbus) include very few myopic redundant aggregates (aggregates already contained in parent blocks).
+- There seems to be a clear correlation between the hardware used to run validators and the validator performance, leading to slightly decreased rewards when the hardware is scaled down. In particular, Teku appears to be the most sensitive to smaller hardware specs, confirming its status as institutions-directed client.
 
 ## Client distribution
 
-We have roughly equal distribution of clients in the network at genesis.
+We have roughly equal distribution of clients in the network at genesis. The EF operates around 20% of each validator set associated with each client, while the remaining validators are maintained by the team behind the client itself.
 
 ```{r}
 validators %>%
-  .[, .(count=.N), by=client] %>%
+  .[, .(client, team=(if_else(team=="ef", "EF", "Other")))] %>%
+  .[, .(count=.N), by=.(client, team)] %>%
   ggplot() +
-  geom_col(aes(x = client, y = count), fill = myred) +
+  geom_col(aes(x = client, y = count, fill = team)) +
+  scale_fill_manual(name = "Team", values = c(myyellow, myred)) +
   ggtitle("Distribution of clients in the dataset") +
   xlab("Declared client") +
   ylab("Count")
@@ -220,7 +194,7 @@ get_grid_per_client <- function(val_series, selected_client) {
     ggplot() +
     geom_tile(aes(x = epoch, y = validator_index, fill = included_ats)) +
     scale_fill_gradient(low = myred, high = mygreen, na.value = NA,
-                        limits = c(0, max(val_series$expected_ats)),
+                        limits = c(0, max(val_series$included_ats)),
                         guide = FALSE) +
     scale_x_continuous(expand = c(0, 0)) +
     xlab("Epoch") +
@@ -243,6 +217,75 @@ plot_grid <- function(start_epoch, end_epoch, committees = NULL) {
   l[["prysm"]] | l[["lighthouse"]] | l[["nimbus"]] | l[["teku"]]
 }
 ```
+
+## Client performance
+
+### Correctness by slot index
+
+We observe a lot more incorrect head attestations when the attestation is made for the starting slot of a new epoch. We name `slot_index` the index of the slot in the epoch (from 0 to 31).
+
+```{r}
+stats_per_slot[
+  , .(percent_correct_heads = sum(correct_heads) / sum(expected_ats) * 100),
+  by= .(slot_index=att_slot%%32)
+] %>%
+  ggplot() +
+  geom_col(aes(x = slot_index, y = percent_correct_heads), fill=myred) +
+  xlab("Slot index") +
+  ylab("Percent of correct head attestations")
+```
+
+Attesters get the head wrong whenever the block they are supposed to attest for is late, and comes much after the attestation was published. We can check which clients are producing these late blocks.
+
+```{r}
+stats_per_slot[
+  all_bxs[
+    validators[, .(validator_index, client)],
+    on=c("proposer_index" = "validator_index"),
+    nomatch=NULL,
+    .(slot, client)
+  ],
+  on = c("att_slot" = "slot"),
+  nomatch=NULL
+][
+  , .(percent_correct_heads = sum(correct_heads) / sum(expected_ats) * 100),
+  by= .(slot_index=att_slot%%32, client)
+] %>%
+  ggplot() +
+  geom_col(aes(x = slot_index, y = percent_correct_heads, fill=client)) +
+  scale_fill_manual(name="Client", values=client_colours) +
+  facet_wrap(vars(client)) +
+  xlab("Slot index") +
+  ylab("Percent of correct head attestations")
+```
+
+Since these late blocks seem to happen more often at the start of an epoch than at the end, it is quite clear that epoch processing is at fault, with some clients likely spending more time processing the epoch and unable to publish the block on time.
+
+We can also check over time how the performance of validators on blocks at slot index 0 evolves, again plotting per client who is expected to produce the block at slot index 0.
+
+```{r}
+chunk_size <- 50
+stats_per_slot[
+  all_bxs[
+    validators[, .(validator_index, client)],
+    on=c("proposer_index" = "validator_index"),
+    nomatch=NULL,
+    .(slot, client)
+  ],
+  on = c("att_slot" = "slot"),
+  nomatch=NULL
+][
+  att_slot%%32==0, .(percent_correct_heads = sum(correct_heads) / sum(expected_ats) * 100),
+  by= .(epoch_chunk=(att_slot%/%32)%/%chunk_size, client)
+] %>%
+  ggplot() +
+  geom_line(aes(x = epoch_chunk * chunk_size, y = percent_correct_heads, group=client, color=client)) +
+  scale_color_manual(name="Client", values=client_colours) +
+  xlab("Epoch") +
+  ylab("Percent of correct head attestations")
+```
+
+Validators attesting on Teku-expected blocks at slot index 0 performed better at a time when the chain experienced difficulty and the number of block produced was lower, around epochs 200 to 300, which lines up with the suggested explanation of long epoch processing times.
 
 ## Attestations over time
 
@@ -383,6 +426,42 @@ all_ats[slot <= subset_until_slot] %>%
 
 ## Reward rates since genesis
 
+```{r message=FALSE}
+get_reward_timelines <- function(start_epoch, end_epoch, step=25) {
+  start_balances <- get_balances_active_validators(start_epoch)[
+    validators[node_code > 0, .(validator_index, client, first_digit)], on="validator_index"
+  ] %>%
+    mutate(
+      measurement_epoch = start_epoch
+    ) %>%
+    select(-time_active, -activation_epoch)
+  
+  seq(start_epoch+step, end_epoch+1, step) %>%
+    map(function(epoch) {
+      end_balances <- get_balances_active_validators(epoch)[
+        validators[node_code > 0, .(validator_index, client, first_digit)], on="validator_index"
+      ] %>%
+        mutate(
+          measurement_epoch = epoch
+        ) %>%
+        select(-time_active, -activation_epoch)
+      
+      t <- start_balances %>%
+        inner_join(end_balances,
+                   by = c("validator_index", "client", "first_digit")) %>%
+        mutate(reward_rate = (balance.y - balance.x) / balance.x * 100 * epochs_per_year / (measurement_epoch.y - measurement_epoch.x))
+      rr <- t %>%
+        group_by(client, first_digit, measurement_epoch.y) %>%
+        summarise(avg_rr = mean(reward_rate), n_group = n())
+      
+      start_balances <<- end_balances
+      return(rr)
+    }) %>%
+    bind_rows() %>%
+    mutate(region = as_factor(first_digit))
+}
+```
+
 ```{r cache=TRUE, message=FALSE}
 rr_series <- get_reward_timelines(1, end_epoch + 1, step=50)
 ```
@@ -391,8 +470,9 @@ We first look at the reward rates per client since genesis.
 
 ```{r}
 rr_series %>%
-  filter(name == "client") %>%
-  ggplot(aes(x = measurement_epoch.y, y = avg_rr, group=group, color=group)) +
+  group_by(client, measurement_epoch.y) %>%
+  summarise(avg_rr = sum(avg_rr * n_group) / sum(n_group)) %>%
+  ggplot(aes(x = measurement_epoch.y, y = avg_rr, group=client, color=client)) +
   geom_line() +
   scale_color_manual(name = "Client", values = client_colours) +
   xlab("Epoch") +
@@ -404,8 +484,9 @@ Clients are hosted on AWS nodes scattered across four regions in roughly equal p
 
 ```{r}
 rr_series %>%
-  filter(name == "region") %>%
-  ggplot(aes(x = measurement_epoch.y, y = avg_rr, group=group, color=group)) +
+  group_by(region, measurement_epoch.y) %>%
+  summarise(avg_rr = sum(avg_rr * n_group) / sum(n_group)) %>%
+  ggplot(aes(x = measurement_epoch.y, y = avg_rr, group=region, color=region)) +
   geom_line() +
   xlab("Epoch") +
   ylab("Average reward rate") +
@@ -419,14 +500,18 @@ Performing an omnibus test to detect significant difference between any of the f
 
 Around epoch 1020, nodes from regions 1 and 2 were scaled down from t3.xlarge units (4cpu 16GB mem, with unlimited cpu burst) to m5.large units (2cpu, 8GB mem, no burst). We observe a significant loss of performance despite continuous uptime.
 
+Large decreases in all plots below for regions 1 and 2 indicate when nodes were stopped and restarted, circa epochs 1000 for region 1 and epoch 1025 for region 2. When we compare the performance of validators before and after the scaling down of regions 1 and 2, we use epoch 900 as control and epoch 1300 as treatment.
+
 ```{r cache=TRUE, message=FALSE}
-rr_series <- get_reward_timelines(900, end_epoch, step=10)
+start_epoch <- 800
+rr_series <- get_reward_timelines(start_epoch, end_epoch, step=20)
 ```
 
 ```{r}
 rr_series %>%
-  filter(name == "region") %>%
-  ggplot(aes(x = measurement_epoch.y, y = avg_rr, group=group, color=group)) +
+  group_by(region, measurement_epoch.y) %>%
+  summarise(avg_rr = sum(avg_rr * n_group) / sum(n_group)) %>%
+  ggplot(aes(x = measurement_epoch.y, y = avg_rr, group=region, color=region)) +
   geom_line() +
   xlab("Epoch") +
   ylab("Average reward rate") +
@@ -438,8 +523,9 @@ Reward rates per client are affected in roughly equal proportions.
 
 ```{r}
 rr_series %>%
-  filter(name == "client") %>%
-  ggplot(aes(x = measurement_epoch.y, y = avg_rr, group=group, color=group)) +
+  group_by(client, measurement_epoch.y) %>%
+  summarise(avg_rr = sum(avg_rr * n_group) / sum(n_group)) %>%
+  ggplot(aes(x = measurement_epoch.y, y = avg_rr, group=client, color=client)) +
   geom_line() +
   scale_color_manual(name = "Client", values = client_colours) +
   xlab("Epoch") +
@@ -447,10 +533,28 @@ rr_series %>%
   ggtitle("Timeline of average rates of reward per client")
 ```
 
+We explore further the difference between clients in regions 1 and 2 and in regions 3 and 4.
+
+```{r}
+rr_series %>%
+  mutate(region = if_else(region == "1" | region == "2", "Regions 1 and 2", "Regions 3 and 4")) %>%
+  group_by(measurement_epoch.y, client, region) %>%
+  summarise(avg_rr = sum(avg_rr * n_group) / sum(n_group)) %>%
+  ggplot(aes(x = measurement_epoch.y, y = avg_rr, color=client, linetype=region)) +
+  geom_line() +
+  scale_color_manual(name = "Client", values = client_colours) +
+  scale_linetype_manual(name = "Region", values = c("solid", "dashed")) +
+  xlab("Epoch") +
+  ylab("Average reward rate") +
+  ggtitle("Timeline of average rates of reward per region") +
+  facet_wrap(vars(client))
+```
+
+It seems that Teku is responsible for most of the reward decrease in regions 1 and 2. Prysm registers a significant, albeit small, decrease in reward rates between the two region groups too.
+
 ### Analysis by duty
 
 ```{r}
-start_epoch <- 900
 chunk_size <- 10
 ```
 
@@ -493,7 +597,9 @@ val_series[
         legend.text = element_text(size = 6))
 ```
 
-And now per client.
+Inclusion, target and head correctness all present insignificant differences between the two groups of regions 1 and 2 and regions 3 and 4. However, we observe an increase in the average inclusion delay, which should explain the decreased reward rates for validators in regions 1 and 2.
+
+Teku validators log a higher inclusion delay than others after the switch to smaller containers, as well as worse performance on other duties.
 
 ```{r, layout="l-screen", fig.height=2}
 val_series[
@@ -522,4 +628,3 @@ val_series[
         legend.title = element_text(size = 6),
         legend.text = element_text(size = 6))
 ```
-

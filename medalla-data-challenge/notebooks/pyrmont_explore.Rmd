@@ -59,7 +59,7 @@ mygreen <- "#BFCE80"
 client_colours <- c("#000011", "#ff9a02", "#eb4a9b", "#7dc19e")
 
 start_epoch <- 0
-end_epoch <- 1250
+end_epoch <- 1520
 slots_per_epoch <- 32
 until_slot <- (end_epoch + 2) * slots_per_epoch - 1
 slot_chunk_res <- until_slot %/% 15
@@ -69,13 +69,15 @@ epochs_per_year <- slots_per_year / slots_per_epoch
 
 ```{r eval=FALSE}
 # Run this to add to the dataset
-start_epoch <- 1241
-end_epoch <- 1250
+start_epoch <- 1471
+end_epoch <- 1520
 
 all_bxs <- fread(here::here("pyrmont_data/all_bxs.csv"))
 all_ats <- fread(here::here("pyrmont_data/all_ats.csv"))
 committees <- fread(here::here("pyrmont_data/committees.csv"))
+validators <- fread(here::here("pyrmont_data/initial_validators.csv"))
 val_series <- fread(here::here("pyrmont_data/val_series.csv"))
+stats_per_slot <- fread(here::here("pyrmont_data/stats_per_slot.csv"))
 
 bxs_and_ats <- start_epoch:end_epoch %>%
   map(get_blocks_and_attestations) %>%
@@ -98,11 +100,37 @@ rm(new_committees)
 
 block_root_at_slot <- get_block_root_at_slot(fread(here::here("pyrmont_data/all_bxs.csv")))
 all_ats <- fread(here::here("pyrmont_data/all_ats.csv"))
+committees <- fread(here::here("pyrmont_data/committees.csv"))
+get_correctness_data(all_ats, block_root_at_slot)
+
 new_val_series <- get_stats_per_val(
   all_ats[att_slot >= (start_epoch-1) * slots_per_epoch & att_slot < end_epoch * slots_per_epoch],
-  block_root_at_slot, chunk_size = 10)
+  block_root_at_slot, committees = committees, validators = validators, chunk_size = 10)
 list(val_series, new_val_series) %>% rbindlist() %>% fwrite(here::here("pyrmont_data/val_series.csv"))
 rm(new_val_series)
+
+new_stats_per_slot <- get_stats_per_slot(
+  all_ats[att_slot >= (start_epoch-1) * slots_per_epoch & att_slot < end_epoch * slots_per_epoch],
+  committees)
+list(stats_per_slot, new_stats_per_slot) %>% rbindlist() %>% fwrite(here::here("pyrmont_data/stats_per_slot.csv"))
+rm(new_stats_per_slot)
+```
+
+```{r eval=FALSE}
+all_bxs <- fread(here::here("pyrmont_data/all_bxs.csv"))
+all_ats <- fread(here::here("pyrmont_data/all_ats.csv"))
+committees <- fread(here::here("pyrmont_data/committees.csv"))
+validators <- fread(here::here("pyrmont_data/initial_validators.csv"))
+block_root_at_slot <- get_block_root_at_slot(fread(here::here("pyrmont_data/all_bxs.csv")))
+get_correctness_data(all_ats, block_root_at_slot)
+stats_per_val <- get_stats_per_val(
+  all_ats[att_slot < end_epoch * slots_per_epoch],
+  block_root_at_slot, committees = committees, validators = validators, chunk_size = 10)
+stats_per_slot <- get_stats_per_slot(
+  all_ats[att_slot < end_epoch * slots_per_epoch], committees)
+
+stats_per_val %>% fwrite(here::here("pyrmont_data/val_series.csv"))
+stats_per_slot %>% fwrite(here::here("pyrmont_data/stats_per_slot.csv"))
 ```
 
 ```{r eval=FALSE}
@@ -121,31 +149,17 @@ rm(new_val_series)
   write_csv(here::here("pyrmont_data/subset_ats.csv"))
 ```
 
-```{r cache=TRUE}
+```{r cache=TRUE, cache.lazy=FALSE}
 all_bxs <- fread(here::here("pyrmont_data/all_bxs.csv"))
 all_ats <- fread(here::here("pyrmont_data/all_ats.csv"))
-committees <- fread(here::here("pyrmont_data/committees.csv"))
 validators <- fread(here::here("pyrmont_data/initial_validators.csv"))
 block_root_at_slot <- get_block_root_at_slot(all_bxs)
 get_correctness_data(all_ats, block_root_at_slot)
-stats_per_slot <- get_stats_per_slot(all_ats, committees)
+stats_per_slot <- fread(here::here("pyrmont_data/stats_per_slot.csv"))
 appearances_in_aggs <- get_appearances_in_agg(all_ats)
 myopic_redundant_ats <- get_myopic_redundant_ats(all_ats)
 strong_redundant_ats <- get_strong_redundant_ats(all_ats)
 subset_ats <- fread(here::here("pyrmont_data/subset_ats.csv"))
-```
-
-```{r}
-blocks_with_conflicting_clients <- all_bxs[declared_client != "undecided"] %>%
-  merge(validators[, .(validator_index, client)],
-        by.x = c("proposer_index"), by.y = c("validator_index")) %>%
-  .[client != declared_client] %>%
-  .[order(slot), ]
-```
-
-```{r}
-client_per_validator <- all_bxs %>%
-  .[, .SD[which.max(slot)], by=proposer_index, .SDcols = c("slot", "declared_client")]
 ```
 
 We look at data between epochs 0 and `r end_epoch`.
@@ -559,7 +573,7 @@ In the next table, we present definitions classifying aggregates when two or mor
 | Weakly clashing aggregates | _If not a strongly clashing aggregate_, an aggregate with attesting indices $I$ such that there exists another aggregate _attesting for the same in the same block_ with attesting indices $J$ | There are `r n_weakly_clashing` weakly clashing aggregates until slot `r subset_until_slot`, `r percent_weakly_clashing`% of all aggregates until slot `r subset_until_slot` | These can be aggregated further into one aggregate with attesting indices $I \cup J$. In an ideal world, we have 0 weakly clashing aggregates |
 :::
 
-Size one aggregates appear often in the dataset.
+Size one aggregates do not appear often in the dataset, [an improvement compared to Medalla](https://ethereum.github.io/rig/medalla-data-challenge/notebooks/explore.html#aggregates-glossary).
 
 ::: l-body-outset
 | Name | Explanation | Statistics | Recommendation |
