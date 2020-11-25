@@ -555,7 +555,7 @@ It seems that Teku is responsible for most of the reward decrease in regions 1 a
 ### Analysis by duty
 
 ```{r}
-chunk_size <- 10
+chunk_size <- 50
 ```
 
 We look at four metrics across each region:
@@ -569,62 +569,62 @@ To obtain a time series, we divide the period between epoch `r start_epoch` and 
 
 We start by looking at the metrics per region.
 
-```{r, layout="l-screen", fig.height=2}
+```{r, layout="l-body-outset", fig.height=2}
 val_series[
-  validators[node_code > 0, .(validator_index, client, region=as.character(first_digit))], on="validator_index"
+  validators[node_code > 0, .(validator_index, client, region=str_c("Region ", as.character(first_digit)))], on="validator_index"
 ][epoch >= start_epoch,][
   , .(
-    included_ats=sum(included_ats)/sum(expected_ats) * 100,
-    correct_targets=sum(correct_targets)/sum(expected_ats) * 100,
-    correct_heads=sum(correct_heads)/sum(expected_ats) * 100,
+    included_ats=sum(included_ats)/sum(expected_ats) * 10,
+    correct_targets=sum(correct_targets)/sum(expected_ats) * 10,
+    correct_heads=sum(correct_heads)/sum(expected_ats) * 10,
     inclusion_delay=mean(inclusion_delay, na.rm = TRUE)
   ),
-  by=.(epoch, region)
+  by=.(epoch_chunk=epoch%/%chunk_size, region)
 ] %>%
-  melt(id.vars = c("epoch", "region")) %>%
+  melt(id.vars = c("epoch_chunk", "region")) %>%
   ggplot() +
-  geom_line(aes(x = epoch, y = value, group=region, color=region)) +
+  geom_line(aes(x = epoch_chunk * chunk_size, y = value, group=region, color=region)) +
   xlab("Epoch") +
   ylab("Value") +
   scale_color_discrete(name = "Region") +
   facet_wrap(vars(variable), nrow=1, scales="free_y") +
-  theme(axis.title.x = element_text(size = 6),
-        axis.title.y = element_text(size = 6),
+  theme(axis.text.y=element_text(size = 6),
+        axis.title.x = element_text(size = 8),
+        axis.title.y = element_text(size = 8),
         axis.text.x = element_text(size = 6),
-        axis.text.y = element_text(size = 6),
-        strip.text = element_text(size = 4),
-        legend.title = element_text(size = 6),
-        legend.text = element_text(size = 6))
+        legend.title = element_text(size = 8),
+        legend.text = element_text(size = 7),
+        strip.text = element_text(size = 6))
 ```
 
 Inclusion, target and head correctness all present insignificant differences between the two groups of regions 1 and 2 and regions 3 and 4. However, we observe an increase in the average inclusion delay, which should explain the decreased reward rates for validators in regions 1 and 2.
 
 Teku validators log a higher inclusion delay than others after the switch to smaller containers, as well as worse performance on other duties.
 
-```{r, layout="l-screen", fig.height=2}
+```{r, layout="l-body-outset", fig.height=2}
 val_series[
   validators[node_code > 0, .(validator_index, client, first_digit)], on="validator_index"
 ][epoch >= start_epoch,][
   , .(
-    included_ats=sum(included_ats)/sum(expected_ats) * 100,
-    correct_targets=sum(correct_targets)/sum(expected_ats) * 100,
-    correct_heads=sum(correct_heads)/sum(expected_ats) * 100,
+    included_ats=sum(included_ats)/sum(expected_ats) * 10,
+    correct_targets=sum(correct_targets)/sum(expected_ats) * 10,
+    correct_heads=sum(correct_heads)/sum(expected_ats) * 10,
     inclusion_delay=mean(inclusion_delay, na.rm = TRUE)
   ),
-  by=.(epoch, client)
+  by=.(epoch_chunk=epoch%/%chunk_size, client)
 ] %>%
-  melt(id.vars = c("epoch", "client")) %>%
+  melt(id.vars = c("epoch_chunk", "client")) %>%
   ggplot() +
-  geom_line(aes(x = epoch, y = value, group=client, color=client)) +
+  geom_line(aes(x = epoch_chunk * chunk_size, y = value, group=client, color=client)) +
   xlab("Epoch") +
   ylab("Value") +
   scale_color_manual(name = "Client", values = client_colours) +
   facet_wrap(vars(variable), nrow=1, scales="free_y") +
-  theme(axis.title.x = element_text(size = 6),
-        axis.title.y = element_text(size = 6),
+  theme(axis.text.y=element_text(size = 6),
+        axis.title.x = element_text(size = 8),
+        axis.title.y = element_text(size = 8),
         axis.text.x = element_text(size = 6),
-        axis.text.y = element_text(size = 6),
-        strip.text = element_text(size = 4),
-        legend.title = element_text(size = 6),
-        legend.text = element_text(size = 6))
+        legend.title = element_text(size = 8),
+        legend.text = element_text(size = 7),
+        strip.text = element_text(size = 6))
 ```
