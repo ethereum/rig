@@ -56,7 +56,7 @@ myyellow <- "#FED152"
 mygreen <- "#BFCE80"
 client_colours <- c("#000011", "#ff9a02", "#eb4a9b", "#7dc19e")
 
-end_epoch <- 1520
+end_epoch <- 1750
 slots_per_epoch <- 32
 until_slot <- (end_epoch + 2) * slots_per_epoch - 1
 slot_chunk_res <- until_slot %/% 15
@@ -158,7 +158,11 @@ stats_per_slot <- fread(here::here("pyrmont_data/stats_per_slot.csv"))
 # pairwise.t.test(reward_rates$reward_rate, reward_rates$first_digit, p.adjust.method = "none")
 ```
 
-In this report, we focus on the initial set of 99,900 validators controlled by the Ethereum and the client teams. This report was compiled with data until epoch `r end_epoch`.
+In this report, we focus on the initial set of 99,900 validators controlled by the Ethereum Foundation and the client teams. This report was compiled with data until epoch `r end_epoch`.
+
+<aside>
+All code available [here](https://github.com/ethereum/rig/blob/master/medalla-data-challenge/notebooks/pyrmont_compare.Rmd).
+</aside>
 
 ## High-level insights
 
@@ -187,37 +191,6 @@ validators %>%
   ylab("Count")
 ```
 
-```{r}
-get_grid_per_client <- function(val_series, selected_client) {
-  val_series[client == selected_client] %>%
-    mutate(validator_index = as.factor(validator_index)) %>%
-    ggplot() +
-    geom_tile(aes(x = epoch, y = validator_index, fill = included_ats)) +
-    scale_fill_gradient(low = myred, high = mygreen, na.value = NA,
-                        limits = c(0, max(val_series$included_ats)),
-                        guide = FALSE) +
-    scale_x_continuous(expand = c(0, 0)) +
-    xlab("Epoch") +
-    ylab("Validators") +
-    theme(axis.text.y=element_blank(),
-          axis.ticks.y=element_blank(),
-          panel.background=element_rect(fill=myred, colour=myred),
-          axis.title.x = element_text(size = 6),
-          axis.title.y = element_text(size = 6),
-          axis.text.x = element_text(size = 6),
-          strip.text = element_text(size = 7))
-}
-
-plot_grid <- function(start_epoch, end_epoch, committees = NULL) {
-  l <- c("prysm", "lighthouse", "nimbus", "teku") %>%
-    map(function(client) {
-      get_grid_per_client(val_series, client)
-    })
-  
-  l[["prysm"]] | l[["lighthouse"]] | l[["nimbus"]] | l[["teku"]]
-}
-```
-
 ## Client performance
 
 ### Correctness by slot index
@@ -236,6 +209,21 @@ stats_per_slot[
 ```
 
 Attesters get the head wrong whenever the block they are supposed to attest for is late, and comes much after the attestation was published. We can check which clients are producing these late blocks.
+
+<aside>
+Note that there is a similar issue with targets, since the first block of a new epoch is also likely the candidate target checkpoint.
+
+```{r}
+stats_per_slot[
+  , .(percent_correct_targets = sum(correct_targets) / sum(expected_ats) * 100),
+  by= .(slot_index=att_slot%%32)
+] %>%
+  ggplot() +
+  geom_col(aes(x = slot_index, y = percent_correct_targets), fill=myred) +
+  xlab("Slot index") +
+  ylab("Correct targets")
+```
+</aside>
 
 ```{r}
 stats_per_slot[
@@ -292,6 +280,37 @@ Validators attesting on Teku-expected blocks at slot index 0 performed better at
 In the plots below, we align on the y-axis validators activated at genesis. A point on the plot is coloured in green when the validator has managed to get their attestation included for the epoch given on the x-axis. Otherwise, the point is coloured in red. Note that we do not check for the correctness of the attestation, merely its presence in some block of the beacon chain.
 
 The plots allow us to check when a particular client is experiencing issues, at which point some share of validators of that client will be unable to publish their attestations.
+
+```{r}
+get_grid_per_client <- function(val_series, selected_client) {
+  val_series[client == selected_client] %>%
+    mutate(validator_index = as.factor(validator_index)) %>%
+    ggplot() +
+    geom_tile(aes(x = epoch, y = validator_index, fill = included_ats)) +
+    scale_fill_gradient(low = myred, high = mygreen, na.value = NA,
+                        limits = c(0, max(val_series$included_ats)),
+                        guide = FALSE) +
+    scale_x_continuous(expand = c(0, 0)) +
+    xlab("Epoch") +
+    ylab("Validators") +
+    theme(axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+          panel.background=element_rect(fill=myred, colour=myred),
+          axis.title.x = element_text(size = 6),
+          axis.title.y = element_text(size = 6),
+          axis.text.x = element_text(size = 6),
+          strip.text = element_text(size = 7))
+}
+
+plot_grid <- function(start_epoch, end_epoch, committees = NULL) {
+  l <- c("prysm", "lighthouse", "nimbus", "teku") %>%
+    map(function(client) {
+      get_grid_per_client(val_series, client)
+    })
+  
+  l[["prysm"]] | l[["lighthouse"]] | l[["nimbus"]] | l[["teku"]]
+}
+```
 
 ### Lighthouse
 
@@ -504,6 +523,7 @@ Large decreases in all plots below for regions 1 and 2 indicate when nodes were 
 
 ```{r cache=TRUE, message=FALSE}
 start_epoch <- 800
+end_epoch <- 1400
 rr_series <- get_reward_timelines(start_epoch, end_epoch, step=20)
 ```
 

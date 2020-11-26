@@ -59,7 +59,7 @@ mygreen <- "#BFCE80"
 client_colours <- c("#000011", "#ff9a02", "#eb4a9b", "#7dc19e")
 
 start_epoch <- 0
-end_epoch <- 1520
+end_epoch <- 1750
 slots_per_epoch <- 32
 until_slot <- (end_epoch + 2) * slots_per_epoch - 1
 slot_chunk_res <- until_slot %/% 15
@@ -69,8 +69,8 @@ epochs_per_year <- slots_per_year / slots_per_epoch
 
 ```{r eval=FALSE}
 # Run this to add to the dataset
-start_epoch <- 1471
-end_epoch <- 1520
+start_epoch <- 1701
+end_epoch <- 1750
 
 all_bxs <- fread(here::here("pyrmont_data/all_bxs.csv"))
 all_ats <- fread(here::here("pyrmont_data/all_ats.csv"))
@@ -162,7 +162,11 @@ strong_redundant_ats <- get_strong_redundant_ats(all_ats)
 subset_ats <- fread(here::here("pyrmont_data/subset_ats.csv"))
 ```
 
-We look at data between epochs 0 and `r end_epoch`.
+We look at data between epochs 0 and `r end_epoch` and report updated metrics for the Pyrmont eth2 testnet. You can also find a similar notebook for [Medalla here](https://ethereum.github.io/rig/medalla-data-challenge/notebooks/explore.html).
+
+<aside>
+All code available [here](https://github.com/ethereum/rig/blob/master/medalla-data-challenge/notebooks/pyrmont_explore.Rmd).
+</aside>
 
 ## Performance of duties
 
