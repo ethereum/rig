@@ -374,6 +374,23 @@ get_stats_per_slot <- function(all_ats, committees, chunk_size = 100) {
     rbindlist()
 }
 
+bxs_per_client <- all_bxs[
+  validators[, .(validator_index, client)],
+  on=c("proposer_index" = "validator_index"),
+  nomatch=NULL,
+  .(slot, producer_client = client)
+]
+all_ats[
+  slot >= 1875 * 32 & slot < 1910 * 32 & slot == att_slot+1,
+] %>%
+  get_exploded_ats() %>%
+  .[committees, on=c("att_slot", "committee_index", "index_in_committee"), nomatch=NULL] %>%
+  .[validators[, .(validator_index, client)], on=c("validator_index"), nomatch=NULL] %>%
+  .[, .(att_slot, slot, validator_index, client)] %>%
+  unique() %>%
+  .[bxs_per_client, on=c("slot"), nomatch=NULL] %>%
+  .[, (n_attester_client=.N), by=.(slot, producer_client, client)]
+
 get_appearances_in_agg <- function(all_ats, chunk_size = 100) {
   min_epoch <- min(all_ats$att_slot) %/% 32
   max_epoch <- max(all_ats$att_slot) %/% 32
