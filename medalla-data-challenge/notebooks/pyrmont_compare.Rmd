@@ -56,7 +56,7 @@ myyellow <- "#FED152"
 mygreen <- "#BFCE80"
 client_colours <- c("#000011", "#ff9a02", "#eb4a9b", "#7dc19e")
 
-end_epoch <- 1910
+end_epoch <- 2240
 slots_per_epoch <- 32
 until_slot <- (end_epoch + 2) * slots_per_epoch - 1
 slot_chunk_res <- until_slot %/% 15
@@ -592,7 +592,7 @@ We start by looking at the metrics per region.
 ```{r, layout="l-body-outset", fig.height=2}
 val_series[
   validators[node_code > 0, .(validator_index, client, region=str_c("Region ", as.character(first_digit)))], on="validator_index"
-][epoch >= start_epoch,][
+][epoch >= start_epoch & epoch < end_epoch,][
   , .(
     included_ats=sum(included_ats)/sum(expected_ats) * 10,
     correct_targets=sum(correct_targets)/sum(expected_ats) * 10,
@@ -624,7 +624,7 @@ Teku validators log a higher inclusion delay than others after the switch to sma
 ```{r, layout="l-body-outset", fig.height=2}
 val_series[
   validators[node_code > 0, .(validator_index, client, first_digit)], on="validator_index"
-][epoch >= start_epoch,][
+][epoch >= start_epoch & epoch < end_epoch,][
   , .(
     included_ats=sum(included_ats)/sum(expected_ats) * 10,
     correct_targets=sum(correct_targets)/sum(expected_ats) * 10,
