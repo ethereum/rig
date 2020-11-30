@@ -56,7 +56,7 @@ myyellow <- "#FED152"
 mygreen <- "#BFCE80"
 client_colours <- c("#000011", "#ff9a02", "#eb4a9b", "#7dc19e")
 
-end_epoch <- 2240
+end_epoch <- 2600
 slots_per_epoch <- 32
 until_slot <- (end_epoch + 2) * slots_per_epoch - 1
 slot_chunk_res <- until_slot %/% 15
@@ -190,6 +190,8 @@ validators %>%
   xlab("Declared client") +
   ylab("Count")
 ```
+
+In the following, statistics are obtained over all EF- and client teams-controlled validators, unless otherwise noted. In particular, we do not inclde data from validators activated after genesis or validators who are not controlled by the EF or the client teams.
 
 ## Client performance
 
@@ -445,10 +447,10 @@ all_ats[slot <= subset_until_slot] %>%
 
 ## Reward rates since genesis
 
-```{r message=FALSE}
+```{r}
 get_reward_timelines <- function(start_epoch, end_epoch, step=25) {
   start_balances <- get_balances_active_validators(start_epoch)[
-    validators[node_code > 0, .(validator_index, client, first_digit)], on="validator_index"
+    validators[, .(validator_index, client, team, first_digit)], on="validator_index"
   ] %>%
     mutate(
       measurement_epoch = start_epoch
@@ -458,7 +460,7 @@ get_reward_timelines <- function(start_epoch, end_epoch, step=25) {
   seq(start_epoch+step, end_epoch+1, step) %>%
     map(function(epoch) {
       end_balances <- get_balances_active_validators(epoch)[
-        validators[node_code > 0, .(validator_index, client, first_digit)], on="validator_index"
+        validators[, .(validator_index, client, team, first_digit)], on="validator_index"
       ] %>%
         mutate(
           measurement_epoch = epoch
@@ -467,10 +469,10 @@ get_reward_timelines <- function(start_epoch, end_epoch, step=25) {
       
       t <- start_balances %>%
         inner_join(end_balances,
-                   by = c("validator_index", "client", "first_digit")) %>%
+                   by = c("validator_index", "client", "team", "first_digit")) %>%
         mutate(reward_rate = (balance.y - balance.x) / balance.x * 100 * epochs_per_year / (measurement_epoch.y - measurement_epoch.x))
       rr <- t %>%
-        group_by(client, first_digit, measurement_epoch.y) %>%
+        group_by(client, first_digit, team, measurement_epoch.y) %>%
         summarise(avg_rr = mean(reward_rate), n_group = n())
       
       start_balances <<- end_balances
@@ -499,10 +501,11 @@ rr_series %>%
   ggtitle("Timeline of average rates of reward per client")
 ```
 
-Clients are hosted on AWS nodes scattered across four regions in roughly equal proportions. We look at the reward rates per region.
+Ethereum foundation-controlled clients are hosted on AWS nodes scattered across four regions in roughly equal proportions. We look at the reward rates per region.
 
 ```{r}
 rr_series %>%
+  filter(team == "ef") %>%
   group_by(region, measurement_epoch.y) %>%
   summarise(avg_rr = sum(avg_rr * n_group) / sum(n_group)) %>%
   ggplot(aes(x = measurement_epoch.y, y = avg_rr, group=region, color=region)) +
@@ -513,22 +516,74 @@ rr_series %>%
   scale_color_discrete(name = "Region")
 ```
 
-Performing an omnibus test to detect significant difference between any of the four groups, we are unable to find such significance at epoch 800. Not long after, an experiment was performed which we describe now.
+Performing an omnibus test to detect significant difference between any of the four groups, we are unable to find such significance at epoch 800. Not long after, an experiment was performed which we describe in the next section. Before doing so, we investigate reward rates per client for validators controlled by the client team.
+
+### Reward rates per client team
+
+While we presented reward rates for all validators per client above, our results may have involved several competing effects. On the one hand, for each client, 20% of all validators are controlled by the EF. All validators controlled by the EF run on the same hardware for the first 1000 epochs or so (more on this in the next section). While this setting allows us to compare the performance of all clients in a controlled environment, we also expect the client teams behind the development of their client to have better knowledge of the hardware requirements of their software. Thus in the following we present two analyses: first the reward rates of all validators controlled by the EF, per client; second, the reward rates of validators controlled by the client teams.
+
+#### EF-controlled validators
+
+```{r}
+rr_series %>%
+  filter(team == "ef") %>%
+  group_by(client, measurement_epoch.y) %>%
+  summarise(avg_rr = sum(avg_rr * n_group) / sum(n_group)) %>%
+  ggplot(aes(x = measurement_epoch.y, y = avg_rr, group=client, color=client)) +
+  geom_line() +
+  scale_color_manual(name = "Client", values = client_colours) +
+  xlab("Epoch") +
+  ylab("Average reward rate") +
+  ggtitle("Timeline of average rates of reward per client (EF-controlled)")
+```
+
+#### Client teams-controlled validators
+
+```{r}
+rr_series %>%
+  filter(team != "ef") %>%
+  group_by(client, measurement_epoch.y) %>%
+  summarise(avg_rr = sum(avg_rr * n_group) / sum(n_group)) %>%
+  ggplot(aes(x = measurement_epoch.y, y = avg_rr, group=client, color=client)) +
+  geom_line() +
+  scale_color_manual(name = "Client", values = client_colours) +
+  xlab("Epoch") +
+  ylab("Average reward rate") +
+  ggtitle("Timeline of average rates of reward per client (Client team-controlled)")
+```
+
+#### Comparison
+
+```{r}
+rr_series %>%
+  mutate(is_ef = if_else(team == "ef", "EF", "Client team")) %>%
+  group_by(client, is_ef, team, measurement_epoch.y) %>%
+  summarise(avg_rr = sum(avg_rr * n_group) / sum(n_group)) %>%
+  ggplot(aes(x = measurement_epoch.y, y = avg_rr, linetype=is_ef, color=client)) +
+  geom_line() +
+  scale_color_manual(name = "Client", values = client_colours) +
+  scale_linetype_manual(name = "Team", values = c("solid", "dashed")) +
+  xlab("Epoch") +
+  ylab("Average reward rate") +
+  ggtitle("Timeline of average rates of reward per client") +
+  facet_wrap(vars(client))
+```
 
 ## Experiment: Scaling down nodes
 
-Around epoch 1020, nodes from regions 1 and 2 were scaled down from t3.xlarge units (4cpu 16GB mem, with unlimited cpu burst) to m5.large units (2cpu, 8GB mem, no burst). We observe a significant loss of performance despite continuous uptime.
+Around epoch 1020, nodes controlled by the EF in regions 1 and 2 were scaled down from t3.xlarge units (4 CPUs 16GB memory, with unlimited CPU burst) to m5.large units (2 CPUs, 8GB memory, no burst). We observe a significant loss of performance despite continuous uptime.
 
 Large decreases in all plots below for regions 1 and 2 indicate when nodes were stopped and restarted, circa epochs 1000 for region 1 and epoch 1025 for region 2. When we compare the performance of validators before and after the scaling down of regions 1 and 2, we use epoch 900 as control and epoch 1300 as treatment.
 
 ```{r cache=TRUE, message=FALSE}
 start_epoch <- 800
 end_epoch <- 1400
-rr_series <- get_reward_timelines(start_epoch, end_epoch, step=20)
+rr_series <- get_reward_timelines(start_epoch, end_epoch, step=40)
 ```
 
 ```{r}
 rr_series %>%
+  filter(team == "ef") %>%
   group_by(region, measurement_epoch.y) %>%
   summarise(avg_rr = sum(avg_rr * n_group) / sum(n_group)) %>%
   ggplot(aes(x = measurement_epoch.y, y = avg_rr, group=region, color=region)) +
@@ -543,6 +598,7 @@ Reward rates per client are affected in roughly equal proportions.
 
 ```{r}
 rr_series %>%
+  filter(team == "ef") %>%
   group_by(client, measurement_epoch.y) %>%
   summarise(avg_rr = sum(avg_rr * n_group) / sum(n_group)) %>%
   ggplot(aes(x = measurement_epoch.y, y = avg_rr, group=client, color=client)) +
