@@ -69,8 +69,8 @@ epochs_per_year <- slots_per_year / slots_per_epoch
 
 ```{r eval=FALSE}
 # Run this to add to the dataset
-start_epoch <- 1931
-end_epoch <- 2240
+start_epoch <- 2591
+end_epoch <- 2600
 
 all_bxs <- fread(here::here("pyrmont_data/all_bxs.csv"))
 all_ats <- fread(here::here("pyrmont_data/all_ats.csv"))
@@ -134,7 +134,7 @@ stats_per_slot %>% fwrite(here::here("pyrmont_data/stats_per_slot.csv"))
 ```
 
 ```{r eval=FALSE}
-(45001:55000) %>%
+(55001:65000) %>%
   map(function(current_slot) {
     if (current_slot %% 1000 == 0) { print(str_c("slot ", current_slot)) }
     get_aggregate_info(all_ats[slot == current_slot])
@@ -162,7 +162,7 @@ strong_redundant_ats <- get_strong_redundant_ats(all_ats)
 subset_ats <- fread(here::here("pyrmont_data/subset_ats.csv"))
 ```
 
-We look at data between epochs 0 and `r end_epoch` and report updated metrics for the Pyrmont eth2 testnet. You can also find a similar notebook for [Medalla here](https://ethereum.github.io/rig/medalla-data-challenge/notebooks/explore.html).
+We look at data between epochs 0 and `r end_epoch` (`r get_date_from_epoch(end_epoch)`) and report updated metrics for the Pyrmont eth2 testnet. You can also find a similar notebook for [Medalla here](https://ethereum.github.io/rig/medalla-data-challenge/notebooks/explore.html).
 
 <aside>
 All code available [here](https://github.com/ethereum/rig/blob/master/medalla-data-challenge/notebooks/pyrmont_explore.Rmd).
@@ -468,10 +468,10 @@ We now define **subset aggregates**. Suppose two aggregates in the same block wi
 Subset aggregates, much like redundant aggregate attestations (equal aggregates included in more than one block of the canonical chain), can be removed from the finalised chain without losing any voting information. In fact, subset aggregates use much less local information than redundant aggregates. To root out subset aggregates, a client simply must ensure that no aggregate it is prepared to include in a block is a subset aggregate of another. Meanwhile, to root out redundant aggregates, a client must check all past blocks (until the inclusion limit of 32 slots) to ensure that it is not including a redundant aggregate. In a sense, subset aggregate are "worse" as they should be easier to root out.
 
 ```{r}
-subset_until_slot <- 15000
+subset_until_slot <- 65000
 ```
 
-So among all included aggregates in blocks, how many are subset aggregates? We count these instances for attestations included in blocks until slot `r subset_until_slot`.
+So among all included aggregates in blocks, how many are subset aggregates? We count these instances for attestations included in blocks until epoch `r subset_until_slot %/% 32` (`r get_date_from_epoch(subset_until_slot %/% 32)`).
 
 <aside>
 If we need to produce more heat, we may extend to more slots.

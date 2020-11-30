@@ -158,7 +158,7 @@ stats_per_slot <- fread(here::here("pyrmont_data/stats_per_slot.csv"))
 # pairwise.t.test(reward_rates$reward_rate, reward_rates$first_digit, p.adjust.method = "none")
 ```
 
-In this report, we focus on the initial set of 99,900 validators controlled by the Ethereum Foundation and the client teams. This report was compiled with data until epoch `r end_epoch`.
+In this report, we focus on the initial set of 99,900 validators controlled by the Ethereum Foundation and the client teams. This report was compiled with data until epoch `r end_epoch` (`r get_date_from_epoch(end_epoch)`).
 
 <aside>
 All code available [here](https://github.com/ethereum/rig/blob/master/medalla-data-challenge/notebooks/pyrmont_compare.Rmd).
@@ -394,13 +394,13 @@ all_bxs %>%
 ### Subset aggregates
 
 ```{r}
-subset_until_slot <- 15000
+subset_until_slot <- 65000
 ```
 
 Subset aggregates are aggregates included in a block which are fully covered by another aggregate included in the same block. Namely, when aggregate 1 has attesting indices $I$ and aggregate 2 has attesting indices $J$, aggregate 1 is a subset aggregate when $I \subset J$.
 
 <aside>
-This analysis is carried until slot `r subset_until_slot`.
+This analysis is carried until epoch `r subset_until_slot %/% 32` (`r get_date_from_epoch(subset_until_slot %/% 32)`).
 </aside>
 
 ```{r}
@@ -513,7 +513,7 @@ rr_series %>%
   scale_color_discrete(name = "Region")
 ```
 
-Performing an omnibus test to detect significant difference between any of the four groups, we are unable to find such significance.
+Performing an omnibus test to detect significant difference between any of the four groups, we are unable to find such significance at epoch 800. Not long after, an experiment was performed which we describe now.
 
 ## Experiment: Scaling down nodes
 
