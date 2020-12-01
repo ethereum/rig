@@ -59,7 +59,7 @@ mygreen <- "#BFCE80"
 client_colours <- c("#000011", "#ff9a02", "#eb4a9b", "#7dc19e")
 
 start_epoch <- 0
-end_epoch <- 2240
+end_epoch <- 2820
 slots_per_epoch <- 32
 until_slot <- (end_epoch + 2) * slots_per_epoch - 1
 slot_chunk_res <- until_slot %/% 15
@@ -69,8 +69,8 @@ epochs_per_year <- slots_per_year / slots_per_epoch
 
 ```{r eval=FALSE}
 # Run this to add to the dataset
-start_epoch <- 2591
-end_epoch <- 2600
+start_epoch <- 2601
+end_epoch <- 2820
 
 all_bxs <- fread(here::here("pyrmont_data/all_bxs.csv"))
 all_ats <- fread(here::here("pyrmont_data/all_ats.csv"))
@@ -310,7 +310,7 @@ stats_per_slot %>%
 
 ## Aggregate attestations
 
-eth2 is built to scale to tens of thousands of validators. This introduces overhead from message passing (and inclusion) when these validators are asked to vote on the canonical chain. To alleviate the beacon chain, votes (a.k.a. **individual attestations**) can be **aggregated**.
+eth2 is built to scale to tens of thousands of validators. This introduces overhead from message passing (and inclusion) when these validators are asked to vote on the canonical chain. To alleviate the beacon chain, votes (a.k.a. **attestations**) can be **aggregated**.
 
 In particular, an attestation contains five attributes:
 
@@ -320,18 +320,18 @@ In particular, an attestation contains five attributes:
 - Its vote for the source, i.e., the last justified checkpoint in its view.
 - Its vote for the target, i.e., the checkpoint to be justified in its view.
 
-Since we expect validators to broadly agree in times of low latency, we also expect that a lot of individual attestations will share these same five attributes. We can aggregate such a set of individual attestations $I$ into a single, aggregate, attestation.
+Since we expect validators to broadly agree in times of low latency, we also expect that a lot of attestations will share these same five attributes. We can aggregate such a set of attestations $I$ into a single aggregate.
 
 <aside>
-Aggregators are randomly selected by the beacon chain, whose job it is to collect such individual attestations and package them in aggregates.
+Aggregators are randomly selected by the beacon chain, whose job it is to collect attestations and package them in aggregates.
 </aside>
 
-When we have $N$ active validators, about $N / 32$ are selected to attest for each slot in an epoch. The validators for a slot $s$ are further divided between a few committees. Identical votes from validators in the same committee can be aggregated. Assume that two aggregate attestations were formed from individual attestations of validators in set $C(s, c)$, validators in committee $c$ attesting for slot $s$. One aggregate contains individual attestations from set $I \subseteq C(s, c)$ and the other individual attestations from set $J \subseteq C(s, c)$. We have two cases:
+When we have $N$ active validators, about $N / 32$ are selected to attest for each slot in an epoch. The validators for a slot $s$ are further divided between a few committees. Identical votes from validators in the same committee can be aggregated. Assume that two aggregate attestations were formed from attestations of validators in set $C(s, c)$, validators in committee $c$ attesting for slot $s$. One aggregate contains attestations from set $I \subseteq C(s, c)$ and the other attestations from set $J \subseteq C(s, c)$. We have two cases:
 
 - When the intersection of $I$ and $J$ is non-empty, we cannot aggregate the two aggregates further.
 - When the intersection of $I$ and $J$ is empty, the two aggregates can themselves be aggregated, into one containing attestations from validator set $I \cup J$.
 
-### How many individual attestations are contained in aggregates?
+### How many attestations are contained in aggregates?
 
 ```{r message=FALSE}
 all_ats[, contained_ats:=str_count(attesting_indices, "1")]
@@ -340,23 +340,23 @@ all_ats %>%
   .[, .(count=.N), by=contained_ats] %>%
   ggplot() +
   geom_col(aes(x = contained_ats, y = count), fill=myred) +
-  ggtitle("Number of individual attestations per aggregate (histogram)",
+  ggtitle("Number of attestations per aggregate (histogram)",
           subtitle = str_c("Aggregate attestations = ", nrow(all_ats))) +
   xlab("Number of attestations in aggregate") +
   ylab("Count")
 ```
 
-We can plot the same, weighing by the size of the validator set in the aggregate, to count how many individual attestations each size of aggregates included.
+We can plot the same, weighing by the size of the validator set in the aggregate, to count how many attestations each size of aggregates included.
 
 ```{r}
 all_ats %>%
   .[, .(count=.N * contained_ats), by=contained_ats] %>%
   ggplot() +
   geom_col(aes(x = contained_ats, y = count), fill=myred) +
-  ggtitle("Number of individual attestations per aggregate (histogram, weighted)",
+  ggtitle("Number of attestations per aggregate (histogram, weighted)",
           subtitle = str_c("Aggregate attestations = ", nrow(all_ats))) +
   xlab("Number of attestations in aggregate") +
-  ylab("Number of individual attestations")
+  ylab("Number of attestations")
 ```
 
 Overall, we can plot the [Lorenz curve](https://en.wikipedia.org/wiki/Lorenz_curve) of aggregate attestations. This allows us to find out the share of attestations held by the 20% largest aggregates.
@@ -394,7 +394,7 @@ The answer is `r (100 - L_80q * 100)`%.
 
 #### How much savings did aggregates provide?
 
-We compare how many individual attestations exist to how many aggregates were included in blocks.
+In the previous plots, we "double-counted" some attestations which were included in several aggregates. Here, we tally the number of **individual attestations**, unique votes from validators. We compare how many individual attestations to how many aggregates were included in blocks.
 
 ```{r}
 n_aggregates <- all_ats %>% nrow()
@@ -406,24 +406,24 @@ tibble(Name = c("Individual attestations", "Included aggregates", "Savings ratio
   paged_table()
 ```
 
-We have `r round(n_individual_ats / n_aggregates, digits = 2)` times more individual attestations than aggregates, meaning that if we were not aggregating, we would have `r round(n_individual_ats / n_aggregates, digits = 2)` as much data on-chain.
+We have `r round(n_individual_ats / n_aggregates, digits = 2)` times more individual attestations than aggregates, meaning that if we were not aggregating, we would have `r round(n_individual_ats / n_aggregates, digits = 2)` times as much data on-chain.
 
-### In how many aggregate attestations is a single attestation included?
+### In how many aggregate attestations is a  attestation included?
 
-We look at all _individual_ attestations in our dataset, i.e., individual, unaggregated votes, and measure how many times they were included in an aggregate.
+Individual attestations can be included in several aggregates. For each, we count how many aggregates it appears in, and produce the following histogram.
 
 ```{r}
 appearances_in_aggs %>%
   ggplot() +
   geom_col(aes(x = appearances, y = count), fill=myred) +
   scale_y_log10() +
-  ggtitle("Number of times an individual attestation is included in an aggregate (histogram)",
+  ggtitle("Individual attestation inclusions in an aggregate (histogram)",
           subtitle = str_c("Individual attestations = ", n_individual_ats)) +
   xlab("Number of inclusions") +
   ylab("Count (log10)")
 ```
 
-Most attestations were included in an aggregate once only
+Most attestations were included in an aggregate once only.
 
 ### How many redundant aggregate attestations are there?
 
@@ -493,7 +493,7 @@ We find that `r percent_subset`% included aggregates are subset aggregates.
 
 #### How often are subset aggregates of size 1?
 
-Taking a look at instances of subset aggregates, we often observe that the subset aggregate has size 1. In other words, it is often the case that a "big" aggregate is included, aggregating very many validators, and then a second aggregate of size 1, namely, an individual attestation, is included too, while this second individual attestation is already aggregated by the first, larger aggregate.
+In Medalla, we observed that subset aggregates were often of size 1. In other words, frequently a "big" aggregate is included, aggregating very many validators, and then a second aggregate of size 1, namely, a simple attestation, is included too, while this simple attestation is already accounted for by the first, larger aggregate.
 
 ```{r}
 n_subset_ind_ats <- sum(subset_ats$n_subset_ind)
@@ -505,7 +505,7 @@ tibble(Name = c("Subset aggregates of size 1", "Subset aggregates",
   paged_table()
 ```
 
-Awesome!! Clients are leaving subset aggregates of size 1 out of their blocks. This is the right decision.
+In Pyrmont, clients seem to have improved their block-packing algorithms, since we do not find any subset aggregate of size 1.
 
 ### How many times were clashing attestations included in blocks?
 
@@ -560,9 +560,9 @@ We've looked at aggregate attestations in a few different ways. We offer here a 
 | Name | Explanation | Statistics | Recommendation |
 |-|-|-|-|
 | Aggregate | Attestation summarising the vote of validators in a single committee | There are `r n_aggregates` aggregates included from slot 0 to slot `r until_slot` | x |
-| Individual attestation | A single validator vote | There are `r n_individual_ats` individual attestations | x |
+| Individual attestation | A single, unique, validator vote | There are `r n_individual_ats` individual attestations | x |
 | Savings ratio | The ratio of individual attestations to aggregate attestations | The savings ratio is `r savings_ratio` | Keep it up! |
-| Redundant aggregate | An aggregate containing validator attestations which were all already included on-chain, possibly across several aggregates with different attesting indices | x | Don't include these |
+| Redundant aggregate | An aggregate containing validator attestations which were all already included on-chain, possibly across several aggregates with different sets of attesting indices | x | Don't include these |
 | Myopic redundant aggregate | An aggregate included more than once on-chain, always with the same attesting indices | There are `r n_myopic_redundant` myopic redundant aggregates, `r percent_myopic_redundant`% of all aggregates | These are redundant too: don't include them either |
 :::
 
@@ -583,5 +583,5 @@ Size one aggregates do not appear often in the dataset, [an improvement compared
 | Name | Explanation | Statistics | Recommendation |
 |-|-|-|-|
 | Subset aggregate of size 1 | A subset aggregate which is an unaggregated individual attestation | There are `r n_subset_ind_ats` subset aggregates of size 1 until slot `r subset_until_slot`, `r percent_subset_ind`% of all subset aggregates until slot `r subset_until_slot` | Definitely drop these |
-| Aggregate of size 1 | An individual attestations included without being aggregated | There are `r n_size_1_ags` aggregates of size 1 | Either it is weakly clashing, so aggregate it further; or it is a subset aggregate, so drop it; or it is a redundant |
+| Aggregate of size 1 | An attestation included without being aggregated | There are `r n_size_1_ags` aggregates of size 1 | Either it is weakly clashing, so aggregate it further; or it is a subset aggregate, so drop it; or it is a redundant, drop it; or it is new and never aggregated, keep it |
 :::
