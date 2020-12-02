@@ -145,7 +145,7 @@ test_ops_ats <- function(fn, dataset = "individual") {
 }
 
 epoch <- 1
-get_committees <- function(epoch, url="http://192.168.1.235:5052") {
+get_committees <- function(epoch, url="http://192.168.1.172:5052") {
   # print(str_c("Getting committee of epoch ", epoch, "\n"))
   content(GET(str_c(url, "/eth/v1/beacon/states/",
             epoch * slots_per_epoch, "/committees")))$data %>%
@@ -156,7 +156,7 @@ get_committees <- function(epoch, url="http://192.168.1.235:5052") {
          index_in_committee = rowid(slot, index) - 1)]
 }
 
-get_validators <- function(epoch, url="http://192.168.1.235:5052") {
+get_validators <- function(epoch, url="http://192.168.1.172:5052") {
   t <- (content(GET(str_c(url, "/eth/v1/beacon/states/",
                     epoch * slots_per_epoch, "/validators")), as="text") %>%
     fromJSON())$data
@@ -238,7 +238,7 @@ get_block_at_slot <- function(slot) {
   get_block_and_attestations_at_slot()$block
 }
 
-get_block_and_attestations_at_slot <- function(slot, url="http://192.168.1.235:5052") {
+get_block_and_attestations_at_slot <- function(slot, url="http://192.168.1.172:5052") {
   block <- content(GET(str_c(url, "/eth/v1/beacon/blocks/", slot)))$data$message
   
   if (as.numeric(block$slot) != slot) {
