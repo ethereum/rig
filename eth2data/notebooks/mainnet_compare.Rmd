@@ -56,7 +56,7 @@ myyellow <- "#FED152"
 mygreen <- "#BFCE80"
 client_colours <- c("#000011", "#ff9a02", "#eb4a9b", "#7dc19e")
 
-end_epoch <- 170
+end_epoch <- 250
 slots_per_epoch <- 32
 until_slot <- (end_epoch + 1) * slots_per_epoch - 1
 slot_chunk_res <- until_slot %/% 15
@@ -91,7 +91,7 @@ Since the chain started recently, we do not have a lot of graffitis to scrape fr
 
 ```{r}
 validators <- all_bxs[, .(validator_index = proposer_index, client = declared_client)][
-  client != "undecided"
+  client != "undecided" & client != "lodestar"
 ] %>%
   unique()
 ```
@@ -318,7 +318,7 @@ subset_until_slot <- 3000
 Subset aggregates are aggregates included in a block which are fully covered by another aggregate included in the same block. Namely, when aggregate 1 has attesting indices $I$ and aggregate 2 has attesting indices $J$, aggregate 1 is a subset aggregate when $I \subset J$.
 
 <aside>
-This analysis is carried until epoch `r subset_until_slot %/% 32` (`r get_date_from_epoch(subset_until_slot %/% 32)`).
+This analysis is carried until epoch `r subset_until_slot %/% 32` (`r get_date_from_epoch(subset_until_slot %/% 32)` UTC).
 </aside>
 
 ```{r}
