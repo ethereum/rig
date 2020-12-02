@@ -59,7 +59,7 @@ mygreen <- "#BFCE80"
 client_colours <- c("#000011", "#ff9a02", "#eb4a9b", "#7dc19e")
 
 start_epoch <- 0
-end_epoch <- 160
+end_epoch <- 170
 slots_per_epoch <- 32
 until_slot <- (end_epoch + 1) * slots_per_epoch - 1
 slot_chunk_res <- max(32, until_slot %/% 15)
@@ -69,8 +69,8 @@ epochs_per_year <- slots_per_year / slots_per_epoch
 
 ```{r eval=FALSE}
 # Run this to add to the dataset
-start_epoch <- 131
-end_epoch <- 160
+start_epoch <- 161
+end_epoch <- 170
 
 all_bxs <- fread(here::here("mainnet_data/all_bxs.csv"))
 all_ats <- fread(here::here("mainnet_data/all_ats.csv"))
