@@ -56,7 +56,7 @@ myyellow <- "#FED152"
 mygreen <- "#BFCE80"
 client_colours <- c("#000011", "#ff9a02", "#eb4a9b", "#7dc19e")
 
-end_epoch <- 250
+end_epoch <- 350
 slots_per_epoch <- 32
 until_slot <- (end_epoch + 1) * slots_per_epoch - 1
 slot_chunk_res <- until_slot %/% 15
@@ -312,7 +312,7 @@ all_bxs %>%
 ### Subset aggregates
 
 ```{r}
-subset_until_slot <- 3000
+subset_until_slot <- 8000
 ```
 
 Subset aggregates are aggregates included in a block which are fully covered by another aggregate included in the same block. Namely, when aggregate 1 has attesting indices $I$ and aggregate 2 has attesting indices $J$, aggregate 1 is a subset aggregate when $I \subset J$.
@@ -364,7 +364,6 @@ all_ats[slot <= subset_until_slot] %>%
 ## Reward rates since genesis
 
 ```{r}
-start_epoch <- 1
 get_reward_timelines <- function(start_epoch, end_epoch, step=25) {
   start_balances <- get_balances_active_validators(start_epoch)[
     validators[, .(validator_index, client)], on="validator_index"
@@ -417,5 +416,23 @@ rr_series %>%
   ylab("Average reward rate") +
   xlim(0, end_epoch) +
   ggtitle("Timeline of average rates of reward per client")
+```
+
+## Inclusion delay per client
+
+```{r}
+val_series[!is.na(inclusion_delay)][
+  validators, on=c("validator_index"), nomatch=NULL
+][
+  , .(avg_inclusion_delay = sum(inclusion_delay * included_ats) / sum(included_ats)),
+  by=.(epoch, client)
+] %>%
+  ggplot() +
+  geom_line(aes(x = epoch, y = avg_inclusion_delay, color = client)) +
+  scale_color_manual(name = "Client", values = client_colours) +
+  xlab("Epoch") +
+  ylab("Average inclusion delay") +
+  ylim(1.0, 1.3) +
+  ggtitle("Timeline of average inclusion delay per client")
 ```
 
