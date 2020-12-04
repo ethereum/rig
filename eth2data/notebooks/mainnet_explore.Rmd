@@ -59,7 +59,7 @@ mygreen <- "#BFCE80"
 client_colours <- c("#000011", "#ff9a02", "#eb4a9b", "#7dc19e")
 
 start_epoch <- 0
-end_epoch <- 350
+end_epoch <- 640
 slots_per_epoch <- 32
 until_slot <- (end_epoch + 1) * slots_per_epoch - 1
 slot_chunk_res <- max(32, until_slot %/% 15)
@@ -69,8 +69,8 @@ epochs_per_year <- slots_per_year / slots_per_epoch
 
 ```{r eval=FALSE}
 # Run this to add to the dataset
-start_epoch <- 251
-end_epoch <- 350
+start_epoch <- 1
+end_epoch <- 640
 
 all_bxs <- fread(here::here("mainnet_data/all_bxs.csv"))
 all_ats <- fread(here::here("mainnet_data/all_ats.csv"))
@@ -101,11 +101,18 @@ block_root_at_slot <- get_block_root_at_slot(fread(here::here("mainnet_data/all_
 all_ats <- fread(here::here("mainnet_data/all_ats.csv"))
 committees <- fread(here::here("mainnet_data/committees.csv"))
 get_correctness_data(all_ats, block_root_at_slot)
+first_possible_inclusion_slot <- get_first_possible_inclusion_slot(all_bxs)
 
 new_val_series <- get_stats_per_val(
   all_ats[att_slot >= (start_epoch-1) * slots_per_epoch & att_slot < end_epoch * slots_per_epoch],
-  block_root_at_slot, committees = committees, chunk_size = 10)
-list(val_series, new_val_series) %>% rbindlist() %>% fwrite(here::here("mainnet_data/val_series.csv"))
+  block_root_at_slot, first_possible_inclusion_slot,
+  committees = committees, chunk_size = 10)
+list(val_series, new_val_series) %>%
+  rbindlist() %>%
+  fwrite(here::here("mainnet_data/val_series.csv"))
+list(NULL, new_val_series) %>%
+  rbindlist() %>%
+  fwrite(here::here("mainnet_data/val_series.csv"))
 rm(new_val_series)
 
 new_stats_per_slot <- get_stats_per_slot(
@@ -117,7 +124,7 @@ print(str_c("Max slot ", (end_epoch+1)*slots_per_epoch - 1))
 ```
 
 ```{r eval=FALSE}
-(5001:8000) %>%
+(8001:15000) %>%
   map(function(current_slot) {
     if (current_slot %% 1000 == 0) { print(str_c("slot ", current_slot)) }
     get_aggregate_info(all_ats[slot == current_slot])

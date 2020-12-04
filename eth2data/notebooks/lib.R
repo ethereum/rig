@@ -318,6 +318,20 @@ get_block_root_at_slot <- function(all_bxs) {
     as.data.table()
 }
 
+get_first_possible_inclusion_slot <- function(all_bxs) {
+  tibble(
+    slot = 0:max(all_bxs$slot)
+  ) %>%
+    left_join(
+      all_bxs %>%
+        mutate(block_slot = slot) %>%
+        select(slot, block_slot),
+      by = c("slot" = "slot")
+    ) %>%
+    mutate(block_slot = .$block_slot %>% na.locf(fromLast = TRUE)) %>%
+    as.data.table()
+}
+
 get_correctness_data <- function(t, block_root_at_slot) {
   t[, epoch := att_slot %/% slots_per_epoch]
   t[, epoch_slot := epoch * slots_per_epoch]
@@ -327,7 +341,8 @@ get_correctness_data <- function(t, block_root_at_slot) {
   t[, `:=`(epoch = NULL, epoch_slot = NULL)]
 }
 
-get_stats_per_val <- function(all_ats, block_root_at_slot, committees = NULL, validators = NULL, chunk_size = 10) {
+get_stats_per_val <- function(all_ats, block_root_at_slot, first_possible_inclusion_slot,
+                              committees = NULL, validators = NULL, chunk_size = 10) {
   min_epoch <- min(all_ats$att_slot) %/% 32
   max_epoch <- max(all_ats$att_slot) %/% 32
   print(str_c("Min epoch ", min_epoch, ", max epoch ", max_epoch))
@@ -339,23 +354,29 @@ get_stats_per_val <- function(all_ats, block_root_at_slot, committees = NULL, va
           map(get_committees) %>%
           rbindlist()
       }
+      
       if (is.null(validators)) {
         validators <- get_validators(epoch + chunk_size - 1)[time_active > 0, .(validator_index, time_active)]
       }
       
       t <- copy(all_ats[(att_slot >= epoch * slots_per_epoch) & (att_slot < (epoch + chunk_size) * slots_per_epoch)])
+      t[, att_slot_plus := att_slot + 1]
+      t <- t[first_possible_inclusion_slot, on=c("att_slot_plus" = "slot"), nomatch=NULL]
       t <- get_exploded_ats(t)
-      t[, .(inclusion_delay=min(slot)-att_slot),
+      t[, .(inclusion_delay=min(slot)-att_slot, inclusion_delay_by_block=min(slot) - block_slot),
         by=.(att_slot, committee_index, index_in_committee, correct_target, correct_head)] %>%
         .[committees, on=c("att_slot", "committee_index", "index_in_committee"), nomatch = 0] %>%
         .[, .(included_ats=.N,
               correct_targets=sum(correct_target), correct_heads=sum(correct_head),
-              inclusion_delay=mean(inclusion_delay)), by=validator_index
+              inclusion_delay=mean(inclusion_delay),
+              inclusion_delay_by_block=mean(inclusion_delay_by_block)),
+          by=validator_index
         ] %>%
         .[validators[, .(validator_index, time_active)], on=c("validator_index")] %>%
         setnafill("const", 0, cols=c("included_ats", "correct_targets", "correct_heads")) %>%
         .[, .(validator_index, epoch = epoch + chunk_size, expected_ats=chunk_size,
-              included_ats, correct_targets, correct_heads, inclusion_delay)]
+              included_ats, correct_targets, correct_heads,
+              inclusion_delay, inclusion_delay_by_block)]
     }) %>%
     rbindlist()
 }
