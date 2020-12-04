@@ -56,7 +56,7 @@ myyellow <- "#FED152"
 mygreen <- "#BFCE80"
 client_colours <- c("#000011", "#ff9a02", "#eb4a9b", "#7dc19e")
 
-end_epoch <- 350
+end_epoch <- 640
 slots_per_epoch <- 32
 until_slot <- (end_epoch + 1) * slots_per_epoch - 1
 slot_chunk_res <- until_slot %/% 15
@@ -420,6 +420,8 @@ rr_series %>%
 
 ## Inclusion delay per client
 
+We check the inclusion delay over all validators per client.
+
 ```{r}
 val_series[!is.na(inclusion_delay)][
   validators, on=c("validator_index"), nomatch=NULL
@@ -434,5 +436,23 @@ val_series[!is.na(inclusion_delay)][
   ylab("Average inclusion delay") +
   ylim(1.0, 1.3) +
   ggtitle("Timeline of average inclusion delay per client")
+```
+
+We can also check the inclusion delay _by block_, where instead of looking at first inclusion of the attestation minus the attestation slot, we compute the first inclusion of the attestation minus _the earliest block in which this attestation could have been included_. Note that the minimum value of the inclusion delay by block is 0.
+
+```{r}
+val_series[!is.na(inclusion_delay_by_block)][
+  validators, on=c("validator_index"), nomatch=NULL
+][
+  , .(avg_inclusion_delay = sum(inclusion_delay_by_block * included_ats) / sum(included_ats)),
+  by=.(epoch, client)
+] %>%
+  ggplot() +
+  geom_line(aes(x = epoch, y = avg_inclusion_delay, color = client)) +
+  scale_color_manual(name = "Client", values = client_colours) +
+  xlab("Epoch") +
+  ylab("Average inclusion delay by block") +
+  ylim(0.0, 0.3) +
+  ggtitle("Timeline of average inclusion delay by block per client")
 ```
 
