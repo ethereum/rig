@@ -364,8 +364,8 @@ get_stats_per_val <- function(all_ats, block_root_at_slot, first_possible_inclus
       t <- t[first_possible_inclusion_slot, on=c("att_slot_plus" = "slot"), nomatch=NULL]
       t <- get_exploded_ats(t)
       t[, .(inclusion_delay=min(slot)-att_slot, inclusion_delay_by_block=min(slot) - block_slot),
-        by=.(att_slot, committee_index, index_in_committee, correct_target, correct_head)] %>%
-        .[committees, on=c("att_slot", "committee_index", "index_in_committee"), nomatch = 0] %>%
+        by=.(att_slot, block_slot, committee_index, index_in_committee, correct_target, correct_head)] %>%
+        .[committees, on=c("att_slot", "committee_index", "index_in_committee"), nomatch=NULL] %>%
         .[, .(included_ats=.N,
               correct_targets=sum(correct_target), correct_heads=sum(correct_head),
               inclusion_delay=mean(inclusion_delay),
@@ -468,6 +468,60 @@ get_myopic_redundant_ats_detail <- function(all_ats) {
     slot != min_slot, .(n_myopic_redundant = .N), by = slot
   ]
 }
+
+# test_myopic_redundant_ats <- tibble(
+#   att_slot = c(1, 1),
+#   committee_index = c(1, 1),
+#   slot = c(2, 3),
+#   beacon_block_root = c("a", "a"),
+#   source_block_root = c("a", "a"),
+#   target_block_root = c("a", "a"),
+#   attesting_indices = c("101", "101")
+# ) %>%
+#   as.data.table()
+# get_myopic_redundant_ats_detail(test_myopic_redundant_ats) %>% glimpse()
+
+get_redundant_ats <- function(all_ats) {
+  t <- copy(all_ats)
+  t[, ats_index:=.I]
+  t <- get_exploded_ats(t)
+  first_inclusions <- t[, .(first_inclusion=min(slot)),
+    by=.(att_slot, committee_index, index_in_committee, beacon_block_root, source_block_root, target_block_root)]
+  t[
+    first_inclusions,
+    on=c("att_slot", "committee_index", "index_in_committee",
+         "beacon_block_root", "source_block_root", "target_block_root")
+  ][
+    , .(max_inclusion_slot=max(first_inclusion)),
+    by=.(slot, ats_index)
+  ][
+    slot > max_inclusion_slot, .(n_redundant = .N), by = slot
+  ]
+}
+
+# test_redundant_ats <- tibble(
+#   att_slot = c(1, 1, 1),
+#   committee_index = c(1, 1, 1),
+#   slot = c(2, 2, 3),
+#   beacon_block_root = c("a", "a", "a"),
+#   source_block_root = c("a", "a", "a"),
+#   target_block_root = c("a", "a", "a"),
+#   attesting_indices = c("100", "001", "101")
+# ) %>%
+#   as.data.table()
+# get_redundant_ats(test_redundant_ats)
+# 
+# test_not_redundant_ats <- tibble(
+#     att_slot = c(1, 1, 1),
+#     committee_index = c(1, 1, 1),
+#     slot = c(2, 2, 3),
+#     beacon_block_root = c("a", "a", "a"),
+#     source_block_root = c("a", "a", "a"),
+#     target_block_root = c("a", "a", "a"),
+#     attesting_indices = c("100", "001", "111")
+#   ) %>%
+#     as.data.table()
+# get_redundant_ats(test_not_redundant_ats)
 
 get_strong_redundant_ats <- function(all_ats) {
   all_ats %>%
@@ -625,3 +679,39 @@ get_aggregate_info <- function(all_ats) {
            source_block_root, target_block_root,
            n_subset, n_subset_ind, n_strongly_clashing, n_weakly_clashing)
 }
+
+# test_weak_clashing_ats <- tibble(
+#   att_slot = c(1, 1),
+#   committee_index = c(1, 1),
+#   slot = c(2, 2),
+#   beacon_block_root = c("a", "a"),
+#   source_block_root = c("a", "a"),
+#   target_block_root = c("a", "a"),
+#   attesting_indices = c("100", "001")
+# ) %>%
+#   as.data.table()
+# get_aggregate_info(test_weak_clashing_ats) %>% glimpse()
+# 
+# test_strong_clashing_ats <- tibble(
+#   att_slot = c(1, 1),
+#   committee_index = c(1, 1),
+#   slot = c(2, 2),
+#   beacon_block_root = c("a", "a"),
+#   source_block_root = c("a", "a"),
+#   target_block_root = c("a", "a"),
+#   attesting_indices = c("110", "011")
+# ) %>%
+#   as.data.table()
+# get_aggregate_info(test_strong_clashing_ats) %>% glimpse()
+# 
+# test_subset_clashing_ats <- tibble(
+#   att_slot = c(1, 1),
+#   committee_index = c(1, 1),
+#   slot = c(2, 2),
+#   beacon_block_root = c("a", "a"),
+#   source_block_root = c("a", "a"),
+#   target_block_root = c("a", "a"),
+#   attesting_indices = c("101", "001")
+# ) %>%
+#   as.data.table()
+# get_aggregate_info(test_subset_clashing_ats) %>% glimpse()
