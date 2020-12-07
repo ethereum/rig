@@ -15,7 +15,7 @@ output:
     toc_depth: '3'
     df_print: paged
 description: |
-  Delving into client performance.
+  Diving into client performance.
 ---
 
 ```{r setup, include=FALSE}
@@ -39,7 +39,8 @@ newtheme <- theme_grey() + theme(
   axis.text = element_text(size = 9),
   axis.title = element_text(size = 12),
   axis.line = element_line(colour = "#000000"),
-  panel.grid.major = element_blank(),
+  panel.grid.major.y = element_line(colour="#bbbbbb", size=0.1),
+  panel.grid.major.x = element_blank(),
   panel.grid.minor = element_blank(),
   panel.background = element_blank(),
   legend.title = element_text(size = 12),
@@ -56,7 +57,7 @@ myyellow <- "#FED152"
 mygreen <- "#BFCE80"
 client_colours <- c("#000011", "#ff9a02", "#eb4a9b", "#7dc19e")
 
-end_epoch <- 640
+end_epoch <- 1000
 slots_per_epoch <- 32
 until_slot <- (end_epoch + 1) * slots_per_epoch - 1
 slot_chunk_res <- until_slot %/% 15
@@ -65,13 +66,15 @@ epochs_per_year <- slots_per_year / slots_per_epoch
 ```
 
 ```{r cache=TRUE}
-all_ats <- fread(here::here("mainnet_data/all_ats.csv"))
-all_bxs <- fread(here::here("mainnet_data/all_bxs.csv"))
+all_bxs <- fread(here::here("mainnet_data/all_bxs.csv"))[slot < end_epoch * slots_per_epoch]
+all_ats <- fread(here::here("mainnet_data/all_ats.csv"))[att_slot < end_epoch * slots_per_epoch]
 block_root_at_slot <- get_block_root_at_slot(all_bxs)
+get_correctness_data(all_ats, block_root_at_slot)
 all_myopic_redundant_ats <- get_myopic_redundant_ats_detail(all_ats)
-subset_ats <- fread(here::here("mainnet_data/subset_ats.csv"))
-val_series <- fread(here::here("mainnet_data/val_series.csv"))
-stats_per_slot <- fread(here::here("mainnet_data/stats_per_slot.csv"))
+redundant_ats <- get_redundant_ats(all_ats)
+subset_ats <- fread(here::here("mainnet_data/subset_ats.csv"))[slot < end_epoch * slots_per_epoch]
+val_series <- fread(here::here("mainnet_data/val_series.csv"))[epoch <= end_epoch]
+stats_per_slot <- fread(here::here("mainnet_data/stats_per_slot.csv"))[att_slot < end_epoch * slots_per_epoch]
 ```
 
 This report was compiled with data until epoch `r end_epoch` (`r get_date_from_epoch(end_epoch)` UTC). We look at the performance of validators who self-declared their client, either writing the client name in their graffiti or with the POAP tag.
@@ -114,11 +117,11 @@ We have identified the client of `r nrow(validators)` validators, out of `r nrow
 
 ### Correctness by slot index
 
-We observe a lot more incorrect head attestations when the attestation is made for the starting slot of a new epoch. We name `slot_index` the index of the slot in the epoch (from 0 to 31).
+It's close, but we observe a more incorrect head attestations when the attestation is made for the starting slot of a new epoch. We name `slot_index` the index of the slot in the epoch (from 0 to 31).
 
 ```{r}
 stats_per_slot[
-  , .(percent_correct_heads = sum(correct_heads) / sum(expected_ats) * 100),
+  , .(percent_correct_heads = sum(correct_heads) / sum(included_ats) * 100),
   by= .(slot_index=att_slot%%32)
 ] %>%
   ggplot() +
@@ -134,7 +137,7 @@ Note that there is a similar issue with targets, since the first block of a new 
 
 ```{r}
 stats_per_slot[
-  , .(percent_correct_targets = sum(correct_targets) / sum(expected_ats) * 100),
+  , .(percent_correct_targets = sum(correct_targets) / sum(included_ats) * 100),
   by= .(slot_index=att_slot%%32)
 ] %>%
   ggplot() +
@@ -155,7 +158,7 @@ stats_per_slot[
   on = c("att_slot" = "slot"),
   nomatch=NULL
 ][
-  , .(percent_correct_heads = sum(correct_heads) / sum(expected_ats) * 100),
+  , .(percent_correct_heads = sum(correct_heads) / sum(included_ats) * 100),
   by= .(slot_index=att_slot%%32, client)
 ] %>%
   ggplot() +
@@ -262,105 +265,6 @@ get_grid_per_client(val_series[
 ], "teku")
 ```
 
-## Block-packing
-
-A block can include at most 128 aggregate attestations. How many aggregate attestations did each client include on average?
-
-```{r}
-chunk_size <- 25
-all_ats %>%
-  .[, .(included_ats = .N), by=slot] %>%
-  merge(all_bxs[, .(slot, proposer_index)]) %>%
-  merge(validators[, .(validator_index, client)],
-        by.x = c("proposer_index"), by.y = c("validator_index")) %>%
-  mutate(epoch_chunk = slot %/% slots_per_epoch %/% chunk_size) %>%
-  group_by(epoch_chunk, client) %>%
-  summarise(included_ats = mean(included_ats)) %>%
-  ggplot(aes(x = epoch_chunk * chunk_size, y = included_ats, group=client, color=client)) +
-  geom_line() +
-  scale_color_manual(name = "Client", values = client_colours) +
-  ylim(0, 128) +
-  ggtitle("Average number of aggregates included per block") +
-  xlab("Declared client") +
-  ylab("Average number of aggregates")
-```
-
-Smaller blocks lead to healthier network, as long as they do not leave attestations aside. We check how each client manages redundancy in the next sections.
-
-### Myopic redundant aggregates
-
-Myopic redundant aggregates were already published, with the same attesting indices, in a previous block.
-
-```{r}
-chunk_size <- 25
-all_bxs %>%
-  merge(validators[, .(validator_index, client)],
-        by.x = c("proposer_index"), by.y = c("validator_index")) %>%
-  merge(all_myopic_redundant_ats, by.x = c("slot"), by.y = c("slot"), all.x = TRUE) %>%
-  setnafill("const", fill = 0, cols = c("n_myopic_redundant")) %>%
-  mutate(epoch_chunk = slot %/% slots_per_epoch %/% chunk_size) %>%
-  group_by(epoch_chunk, client) %>%
-  summarise(n_myopic_redundant = mean(n_myopic_redundant)) %>%
-  ggplot(aes(x = epoch_chunk * chunk_size, y = n_myopic_redundant, group=client, color=client)) +
-  geom_line() +
-  scale_color_manual(name = "Client", values = client_colours) +
-  ggtitle("Average number of myopic redundant aggregates per block") +
-  xlab("Epoch") +
-  ylab("Average myopic aggregates")
-```
-
-### Subset aggregates
-
-```{r}
-subset_until_slot <- 8000
-```
-
-Subset aggregates are aggregates included in a block which are fully covered by another aggregate included in the same block. Namely, when aggregate 1 has attesting indices $I$ and aggregate 2 has attesting indices $J$, aggregate 1 is a subset aggregate when $I \subset J$.
-
-<aside>
-This analysis is carried until epoch `r subset_until_slot %/% 32` (`r get_date_from_epoch(subset_until_slot %/% 32)` UTC).
-</aside>
-
-```{r}
-chunk_size <- 10
-all_bxs[slot <= subset_until_slot] %>%
-  merge(validators[, .(validator_index, client)],
-        by.x = c("proposer_index"), by.y = c("validator_index")) %>%
-  merge(subset_ats, by.x = c("slot"), by.y = c("slot"), all.x = TRUE) %>%
-  setnafill("const", fill = 0, cols = c("n_subset", "n_subset_ind", "n_weakly_clashing", "n_strongly_clashing")) %>%
-  mutate(epoch_chunk = slot %/% slots_per_epoch %/% chunk_size) %>%
-  group_by(epoch_chunk, client) %>%
-  summarise(n_subset = mean(n_subset)) %>%
-  ggplot(aes(x = epoch_chunk * chunk_size, y = n_subset, group=client, color=client)) +
-  geom_line() +
-  scale_color_manual(name = "Client", values = client_colours) +
-  ggtitle("Average number of subset aggregates per block") +
-  xlab("Epoch") +
-  ylab("Average subset aggregates")
-```
-
-Lighthouse and Nimbus both score a perfect 0.
-
-```{r}
-chunk_size <- 5
-all_ats[slot <= subset_until_slot] %>%
-  .[, .(included_ats = .N), by=slot] %>%
-  merge(all_bxs[, .(slot, proposer_index)]) %>%
-  merge(validators[, .(validator_index, client)],
-        by.x = c("proposer_index"), by.y = c("validator_index")) %>%
-  merge(subset_ats, by.x = c("slot"), by.y = c("slot"), all.x = TRUE) %>%
-  setnafill("const", fill = 0, cols = c("n_subset", "n_subset_ind", "n_weakly_clashing", "n_strongly_clashing")) %>%
-  mutate(epoch_chunk = slot %/% slots_per_epoch %/% chunk_size) %>%
-  group_by(epoch_chunk, client) %>%
-  summarise(n_subset = mean(n_subset)) %>%
-  ggplot(aes(x = epoch_chunk * chunk_size, y = n_subset, group=client, color=client)) +
-  geom_line() +
-  scale_color_manual(name = "Client", values = client_colours) +
-  ggtitle("Percentage of subset aggregates among included aggregates") +
-  xlab("Epoch") +
-  ylab("Percentage of subset aggregates in block")
-```
-
 ## Reward rates since genesis
 
 ```{r}
@@ -452,7 +356,127 @@ val_series[!is.na(inclusion_delay_by_block)][
   scale_color_manual(name = "Client", values = client_colours) +
   xlab("Epoch") +
   ylab("Average inclusion delay by block") +
-  ylim(0.0, 0.3) +
+  ylim(0.0, 0.2) +
   ggtitle("Timeline of average inclusion delay by block per client")
 ```
 
+## Block-packing
+
+A block can include at most 128 aggregate attestations. How many aggregate attestations did each client include on average?
+
+```{r}
+chunk_size <- 25
+all_ats %>%
+  .[, .(included_ats = .N), by=slot] %>%
+  merge(all_bxs[, .(slot, proposer_index)]) %>%
+  merge(validators[, .(validator_index, client)],
+        by.x = c("proposer_index"), by.y = c("validator_index")) %>%
+  mutate(epoch_chunk = slot %/% slots_per_epoch %/% chunk_size) %>%
+  group_by(epoch_chunk, client) %>%
+  summarise(included_ats = mean(included_ats)) %>%
+  ggplot(aes(x = epoch_chunk * chunk_size, y = included_ats, group=client, color=client)) +
+  geom_line() +
+  scale_color_manual(name = "Client", values = client_colours) +
+  ylim(0, 128) +
+  ggtitle("Average number of aggregates included per block") +
+  xlab("Declared client") +
+  ylab("Average number of aggregates")
+```
+
+Smaller blocks lead to healthier network, as long as they do not leave attestations aside. We check how each client manages redundancy in the next sections.
+
+### Redundant aggregates
+
+Redundant aggregates are made up of attestations that were all already published, albeit possibly across different aggregates.
+
+```{r}
+chunk_size <- 25
+all_bxs %>%
+  merge(validators[, .(validator_index, client)],
+        by.x = c("proposer_index"), by.y = c("validator_index")) %>%
+  merge(redundant_ats, by.x = c("slot"), by.y = c("slot"), all.x = TRUE) %>%
+  setnafill("const", fill = 0, cols = c("n_redundant")) %>%
+  mutate(epoch_chunk = slot %/% slots_per_epoch %/% chunk_size) %>%
+  group_by(epoch_chunk, client) %>%
+  summarise(n_redundant = mean(n_redundant)) %>%
+  ggplot(aes(x = epoch_chunk * chunk_size, y = n_redundant, group=client, color=client)) +
+  geom_line() +
+  scale_color_manual(name = "Client", values = client_colours) +
+  ggtitle("Average number of redundant aggregates per block") +
+  xlab("Epoch") +
+  ylab("Average myopic aggregates")
+```
+
+### Myopic redundant aggregates
+
+Myopic redundant aggregates were already published, with the same attesting indices, in a previous block.
+
+```{r}
+chunk_size <- 25
+all_bxs %>%
+  merge(validators[, .(validator_index, client)],
+        by.x = c("proposer_index"), by.y = c("validator_index")) %>%
+  merge(all_myopic_redundant_ats, by.x = c("slot"), by.y = c("slot"), all.x = TRUE) %>%
+  setnafill("const", fill = 0, cols = c("n_myopic_redundant")) %>%
+  mutate(epoch_chunk = slot %/% slots_per_epoch %/% chunk_size) %>%
+  group_by(epoch_chunk, client) %>%
+  summarise(n_myopic_redundant = mean(n_myopic_redundant)) %>%
+  ggplot(aes(x = epoch_chunk * chunk_size, y = n_myopic_redundant, group=client, color=client)) +
+  geom_line() +
+  scale_color_manual(name = "Client", values = client_colours) +
+  ggtitle("Average number of myopic redundant aggregates per block") +
+  xlab("Epoch") +
+  ylab("Average myopic aggregates")
+```
+
+### Subset aggregates
+
+```{r}
+subset_until_slot <- 20000
+```
+
+Subset aggregates are aggregates included in a block which are fully covered by another aggregate included in the same block. Namely, when aggregate 1 has attesting indices $I$ and aggregate 2 has attesting indices $J$, aggregate 1 is a subset aggregate when $I \subset J$.
+
+<aside>
+This analysis is carried until epoch `r subset_until_slot %/% 32` (`r get_date_from_epoch(subset_until_slot %/% 32)` UTC).
+</aside>
+
+```{r}
+chunk_size <- 20
+all_bxs[slot <= subset_until_slot] %>%
+  merge(validators[, .(validator_index, client)],
+        by.x = c("proposer_index"), by.y = c("validator_index")) %>%
+  merge(subset_ats, by.x = c("slot"), by.y = c("slot"), all.x = TRUE) %>%
+  setnafill("const", fill = 0, cols = c("n_subset", "n_subset_ind", "n_weakly_clashing", "n_strongly_clashing")) %>%
+  mutate(epoch_chunk = slot %/% slots_per_epoch %/% chunk_size) %>%
+  group_by(epoch_chunk, client) %>%
+  summarise(n_subset = mean(n_subset)) %>%
+  ggplot(aes(x = epoch_chunk * chunk_size, y = n_subset, group=client, color=client)) +
+  geom_line() +
+  scale_color_manual(name = "Client", values = client_colours) +
+  ggtitle("Average number of subset aggregates per block") +
+  xlab("Epoch") +
+  ylab("Average subset aggregates")
+```
+
+Lighthouse and Nimbus both score a perfect 0.
+
+```{r}
+chunk_size <- 20
+all_ats[slot <= subset_until_slot] %>%
+  .[, .(included_ats = .N), by=slot] %>%
+  merge(all_bxs[, .(slot, proposer_index)]) %>%
+  merge(validators[, .(validator_index, client)],
+        by.x = c("proposer_index"), by.y = c("validator_index")) %>%
+  merge(subset_ats, by.x = c("slot"), by.y = c("slot"), all.x = TRUE) %>%
+  setnafill("const", fill = 0, cols = c("n_subset", "n_subset_ind", "n_weakly_clashing", "n_strongly_clashing")) %>%
+  mutate(epoch_chunk = slot %/% slots_per_epoch %/% chunk_size) %>%
+  group_by(epoch_chunk, client) %>%
+  summarise(n_subset = mean(n_subset)) %>%
+  ggplot(aes(x = epoch_chunk * chunk_size, y = n_subset, group=client, color=client)) +
+  geom_line() +
+  scale_color_manual(name = "Client", values = client_colours) +
+  ggtitle("Percentage of subset aggregates among included aggregates") +
+  xlab("Epoch") +
+  ylab("Percentage of subset aggregates in block")
+```

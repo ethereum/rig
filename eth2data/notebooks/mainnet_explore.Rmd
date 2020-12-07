@@ -1,5 +1,5 @@
 ---
-title: "Mainnet data"
+title: "Exploring the first 1000 epochs of eth2"
 author:
 - name: Barnabé Monnot
   url: https://twitter.com/barnabemonnot
@@ -15,7 +15,7 @@ output:
     toc_depth: '3'
     df_print: paged
 description: |
-  Mr. F was here.
+  Mr. F was here. And many more too.
 ---
 
 ```{r setup, include=FALSE}
@@ -41,7 +41,8 @@ newtheme <- theme_grey() + theme(
   axis.text = element_text(size = 9),
   axis.title = element_text(size = 12),
   axis.line = element_line(colour = "#000000"),
-  panel.grid.major = element_blank(),
+  panel.grid.major.y = element_line(colour="#bbbbbb", size=0.1),
+  panel.grid.major.x = element_blank(),
   panel.grid.minor = element_blank(),
   panel.background = element_blank(),
   legend.title = element_text(size = 12),
@@ -59,7 +60,7 @@ mygreen <- "#BFCE80"
 client_colours <- c("#000011", "#ff9a02", "#eb4a9b", "#7dc19e")
 
 start_epoch <- 0
-end_epoch <- 640
+end_epoch <- 1000
 slots_per_epoch <- 32
 until_slot <- (end_epoch + 1) * slots_per_epoch - 1
 slot_chunk_res <- max(32, until_slot %/% 15)
@@ -69,8 +70,8 @@ epochs_per_year <- slots_per_year / slots_per_epoch
 
 ```{r eval=FALSE}
 # Run this to add to the dataset
-start_epoch <- 1
-end_epoch <- 640
+start_epoch <- 931
+end_epoch <- 1040
 
 all_bxs <- fread(here::here("mainnet_data/all_bxs.csv"))
 all_ats <- fread(here::here("mainnet_data/all_ats.csv"))
@@ -97,7 +98,8 @@ new_committees <- start_epoch:end_epoch %>%
 list(committees, new_committees) %>% rbindlist() %>% fwrite(here::here("mainnet_data/committees.csv"))
 rm(new_committees)
 
-block_root_at_slot <- get_block_root_at_slot(fread(here::here("mainnet_data/all_bxs.csv")))
+all_bxs <- fread(here::here("mainnet_data/all_bxs.csv"))
+block_root_at_slot <- get_block_root_at_slot(all_bxs)
 all_ats <- fread(here::here("mainnet_data/all_ats.csv"))
 committees <- fread(here::here("mainnet_data/committees.csv"))
 get_correctness_data(all_ats, block_root_at_slot)
@@ -107,10 +109,8 @@ new_val_series <- get_stats_per_val(
   all_ats[att_slot >= (start_epoch-1) * slots_per_epoch & att_slot < end_epoch * slots_per_epoch],
   block_root_at_slot, first_possible_inclusion_slot,
   committees = committees, chunk_size = 10)
+
 list(val_series, new_val_series) %>%
-  rbindlist() %>%
-  fwrite(here::here("mainnet_data/val_series.csv"))
-list(NULL, new_val_series) %>%
   rbindlist() %>%
   fwrite(here::here("mainnet_data/val_series.csv"))
 rm(new_val_series)
@@ -120,11 +120,18 @@ new_stats_per_slot <- get_stats_per_slot(
   committees)
 list(stats_per_slot, new_stats_per_slot) %>% rbindlist() %>% fwrite(here::here("mainnet_data/stats_per_slot.csv"))
 rm(new_stats_per_slot)
-print(str_c("Max slot ", (end_epoch+1)*slots_per_epoch - 1))
+
+get_exploded_ats(all_ats[att_slot < 1000 * 32])[
+  , .(inclusion_delay=min(slot)-att_slot),
+  by=.(att_slot, committee_index, index_in_committee,
+       beacon_block_root, source_block_root, target_block_root)
+][
+  , .(count=.N), by=.(inclusion_delay)
+] %>% fwrite(here::here("mainnet_data/inclusion_delay.csv"))
 ```
 
 ```{r eval=FALSE}
-(8001:15000) %>%
+(20001:32000) %>%
   map(function(current_slot) {
     if (current_slot %% 1000 == 0) { print(str_c("slot ", current_slot)) }
     get_aggregate_info(all_ats[slot == current_slot])
@@ -140,15 +147,16 @@ print(str_c("Max slot ", (end_epoch+1)*slots_per_epoch - 1))
 ```
 
 ```{r cache=TRUE, cache.lazy=FALSE}
-all_bxs <- fread(here::here("mainnet_data/all_bxs.csv"))
-all_ats <- fread(here::here("mainnet_data/all_ats.csv"))
+all_bxs <- fread(here::here("mainnet_data/all_bxs.csv"))[slot < end_epoch * slots_per_epoch]
+all_ats <- fread(here::here("mainnet_data/all_ats.csv"))[att_slot < end_epoch * slots_per_epoch]
 block_root_at_slot <- get_block_root_at_slot(all_bxs)
 get_correctness_data(all_ats, block_root_at_slot)
-stats_per_slot <- fread(here::here("mainnet_data/stats_per_slot.csv"))
+stats_per_slot <- fread(here::here("mainnet_data/stats_per_slot.csv"))[att_slot < end_epoch * slots_per_epoch]
 appearances_in_aggs <- get_appearances_in_agg(all_ats)
+redundant_ats <- get_redundant_ats(all_ats)
 myopic_redundant_ats <- get_myopic_redundant_ats(all_ats)
 strong_redundant_ats <- get_strong_redundant_ats(all_ats)
-subset_ats <- fread(here::here("mainnet_data/subset_ats.csv"))
+subset_ats <- fread(here::here("mainnet_data/subset_ats.csv"))[slot < end_epoch * slots_per_epoch]
 ```
 
 We look at data between epochs 0 and `r end_epoch` (`r get_date_from_epoch(end_epoch)` UTC) and report updated metrics for eth2's mainnet. You can also find a similar notebook for [Medalla here](https://ethereum.github.io/rig/eth2data/notebooks/medalla_explore.html) and [Pyrmont here](https://ethereum.github.io/rig/eth2data/notebooks/pyrmont_explore.html).
@@ -159,9 +167,38 @@ All code available [here](https://github.com/ethereum/rig/blob/master/eth2data/n
 
 ## Performance of duties
 
+### Anatomy of an aggregate
+
+Before we begin, remember that the beacon chain is composed of **blocks**, each of which contains up to 128 **aggregates**. These aggregates are "vote summaries", where each aggregate summarises the votes (**attestations**) of all members of a **committee**. Each **epoch**, validators are assigned to exactly one committee. An epoch is divided further into 32 **slots**, each slot being assigned several committees.
+
+We'll often provide examples in the following format. Each row is an aggregate attestation.
+
+```{r, layout="l-body-outset"}
+tibble(
+  slot = c(2),
+  att_slot = c(1),
+  committee_index = c(1),
+  beacon_block = c("3e23"),
+  source_block = c("fa45"),
+  target_block = c("2b99"),
+  attesting_indices = c("101")
+) %>%
+  paged_table()
+```
+
+Let's dissect it.
+
+- `slot` is the inclusion slot of the aggregate, i.e., the slot of the block which contains the aggregate. Note that an aggregate may be included multiple times (we'll look at this below).
+- `att_slot` is the attestation slot of the aggregate. The aggregate summarises votes from one committee of a slot, called the attestation slot.
+- `committee_index` is the index of the committee the aggregate summarises votes from.
+- `beacon_block` is the root of the beacon block validators have voted for. Validators are expected to include in their attestation their best estimate of the current head of the chain following the [GHOST fork choice rule](https://blog.ethereum.org/2020/02/12/validated-staking-on-eth2-2-two-ghosts-in-a-trench-coat/). They are rewarded if the `beacon_block` in their vote corresponds to the head.
+- `source_block` is the root of the source checkpoint. To provide finality under the [Friendly Finality Gadget (FFG)](https://www.adiasg.me/2020/03/31/casper-ffg-explainer.html) rules, validators include a reference to the source checkpoint, the last justified boundary block of an epoch (either the first block of an epoch or, if it is missing, the last block since).
+- `target_block` is the root of the target checkpoint. Effectively validators draw a link between the source and the target checkpoints, indicating that the target should be the next justified epoch.
+- `attesting_indices` is the voting summary. In the example above, we look at a committee of 3 validators (there are 3 digits in `attesting_indices`). `101` indicates that the aggregates contains a vote for the attributes above (attestation slot, committee index, beacon block, source and target blocks) from validators at indices `0` and `2` of the committee. Note that the validator at index `1` could have also published the same vote, but too late for aggregators to pick it up and include it in the summary.
+
 ### Attester duties
 
-We compare the number of included attestations with the number of expected attestations.
+We compare the number of included attestations with the number of expected attestations. Since each (active) validator is expected to attest exactly once per epoch, this also charts the percentage of validators attesting over time.
 
 ```{r}
 stats_per_slot %>%
@@ -186,7 +223,7 @@ stats_per_slot %>%
 
 ### Proposer duties
 
-How many blocks are there in the canonical chain?
+How many blocks are there in the canonical chain? Validators are sampled randomly to produce blocks. If they fail to produce one, the block is missing. They also sometimes produce one but the block is **orphaned**, i.e., the chain continues on a different block. The plot below charts the proportion of included blocks to expected blocks.
 
 ```{r}
 tibble(slot = 0:until_slot) %>%
@@ -218,7 +255,7 @@ tibble(slot = 0:until_slot) %>%
 
 ### Target checkpoint
 
-Attestations vouch for some target checkpoint to justify. We can check whether they vouched for the correct one by comparing their `target_block_root` with the latest known block root as of the start of the attestation epoch (that's a mouthful). How many individual attestations correctly attest for the target?
+Attestations vouch for some target checkpoint to justify. We can check whether they vouched for the correct one by comparing their `target_block` with the latest known block root as of the start of the attestation epoch (that's a mouthful). How many **individual attestations** (unique votes by validators) correctly attest for the target?
 
 ```{r}
 n_individual_ats <- stats_per_slot %>%
@@ -260,7 +297,7 @@ stats_per_slot %>%
 
 ### Head of the chain
 
-Attestations must also vote for the correct head of the chain, as returned by the [GHOST fork choice rule]. To check for correctness, one looks at the latest block known as of the attestation slot. Possibly, this block was proposed for the same slot as the attestation `att_slot`. When the `beacon_block_root` attribute of the attestation and the latest block root match, the head is correct!
+Attestations must also vote for the correct head of the chain, as returned by the [GHOST fork choice rule](https://blog.ethereum.org/2020/02/12/validated-staking-on-eth2-2-two-ghosts-in-a-trench-coat/). To check for correctness, one looks at the latest block known as of the attestation slot. Possibly, this block was proposed for the same slot as the attestation `att_slot`. When the `beacon_block_root` attribute of the attestation and the latest block root match, the head is correct!
 
 ```{r}
 n_correct_head_ats <- stats_per_slot %>%
@@ -297,19 +334,26 @@ stats_per_slot %>%
   ylim(0, 100)
 ```
 
+### Inclusion delay
+
+Attestations are rewarded for how fast they are included. An attestation must be included at least one slot later than its attestation slot and at most 32 slots later. The inclusion delay is taken to be the minimum inclusion time, and is thus contained between 1 and 32.
+
+```{r}
+fread(here::here("mainnet_data/inclusion_delay.csv")) %>%
+  ggplot() +
+  geom_col(aes(x = inclusion_delay, y = count), fill=myred) +
+  scale_y_log10() +
+  xlab("Inclusion delay") +
+  ylab("Count (Individual attestations, log10)") +
+  ggtitle("Inclusion delay histogram",
+          subtitle=str_c("Individual attestations = ", n_individual_ats))
+```
+
 ## Aggregate attestations
 
-eth2 is built to scale to tens of thousands of validators. This introduces overhead from message passing (and inclusion) when these validators are asked to vote on the canonical chain. To alleviate the beacon chain, votes (a.k.a. **attestations**) can be **aggregated**.
+eth2 is built to scale to hundreds of thousands of validators. This introduces overhead from message passing (and inclusion) when these validators are asked to vote on the canonical chain. To alleviate the beacon chain, votes (a.k.a. **attestations**) can be **aggregated**.
 
-In particular, an attestation contains five attributes:
-
-- The slot it is attesting for ("**attestation slot**").
-- The index of its committee in the slot ("**attestation committee**").
-- Its vote for the head of the beacon chain, given by the fork choice rule.
-- Its vote for the source, i.e., the last justified checkpoint in its view.
-- Its vote for the target, i.e., the checkpoint to be justified in its view.
-
-Since we expect validators to broadly agree in times of low latency, we also expect that a lot of attestations will share these same five attributes. We can aggregate such a set of attestations $I$ into a single aggregate.
+Since we expect validators to broadly agree in times of low latency, we also expect that a lot of attestations will vote for identical items. We can aggregate such a set of attestations $I$ into a single aggregate.
 
 <aside>
 Aggregators are randomly selected by the beacon chain, whose job it is to collect attestations and package them in aggregates.
@@ -321,6 +365,8 @@ When we have $N$ active validators, about $N / 32$ are selected to attest for ea
 - When the intersection of $I$ and $J$ is empty, the two aggregates can themselves be aggregated, into one containing attestations from validator set $I \cup J$.
 
 ### How many attestations are contained in aggregates?
+
+To obtain this measure, we simply count how many `1`s appear in the `attesting_indices` attribute of an aggregate.
 
 ```{r message=FALSE}
 all_ats[, contained_ats:=str_count(attesting_indices, "1")]
@@ -408,6 +454,7 @@ Individual attestations can be included in several aggregates. For each, we coun
 appearances_in_aggs %>%
   ggplot() +
   geom_col(aes(x = appearances, y = count), fill=myred) +
+  scale_x_continuous(breaks=c(2,4,6,8)) +
   scale_y_log10() +
   ggtitle("Individual attestation inclusions in an aggregate (histogram)",
           subtitle = str_c("Individual attestations = ", n_individual_ats)) +
@@ -417,9 +464,26 @@ appearances_in_aggs %>%
 
 Most attestations were included in an aggregate once only.
 
-### How many redundant aggregate attestations are there?
+### How many (myopic) redundant aggregate attestations are there?
 
 We call **myopic redundant** identical aggregate attestations (same five attributes and same set of validator indices) which are included in more than one block. It can happen when a block producer does not see that an aggregate was previously included (e.g., because of latency), or simply when the block producer doesn't pay attention and greedily adds as many aggregates as they know about.
+
+For instance, the two aggregates below are myopic redundant. They have the same attesting indices and same attributes, yet were published in two different blocks (notice the different `slot`).
+
+```{r, layout="l-body-outset"}
+tibble(
+  slot = c(2, 3),
+  att_slot = c(1, 1),
+  committee_index = c(1, 1),
+  beacon_block = c("3e23", "3e23"),
+  source_block = c("fa45", "fa45"),
+  target_block = c("2b99", "2b99"),
+  attesting_indices = c("101", "101")
+) %>%
+  paged_table()
+```
+
+We plot a histogram of the number of times an aggregate was included on-chain.
 
 ```{r}
 myopic_redundant_ats %>%
@@ -427,18 +491,72 @@ myopic_redundant_ats %>%
   geom_col(aes(x = appearances, y = count), fill=myred) +
   ggtitle("Number of times one aggregate attestation is included (histogram)",
           subtitle = str_c("Aggregate attestations = ", nrow(all_ats))) +
-  xlab("Number of times redundant") +
+  xlab("Number of times included") +
   ylab("Count (log10)") +
   scale_y_log10()
 ```
 
 The mode is 1, which is also the optimal case. A redundant aggregate does not have much purpose apart from bloating the chain.
 
-We could generalise this definition and call **redundant** an aggregate included in a block for which all of its attesting indices were previously seen in other aggregates. We didn't compute these as they are much harder to count.
+```{r}
+n_redundant <- redundant_ats %>%
+  pull(n_redundant) %>%
+  sum()
+percent_redundant <- round(n_redundant / n_aggregates, digits=4) * 100
+
+n_myopic_redundant <- myopic_redundant_ats %>%
+  filter(appearances > 1) %>%
+  pull(count) %>%
+  sum()
+percent_myopic_redundant <- round(n_myopic_redundant / n_aggregates, digits=4) * 100
+percent_myopic_redundant_among_redundant <- round(n_myopic_redundant / n_redundant, digits=4) * 100
+```
+
+We could generalise the myopic redundant definition and call **redundant** an aggregate included in a block for which all of its attesting indices were previously seen in other aggregates.
+
+In the example below, the third aggregate is redundant, though not _myopic_ redundant. It is made up of indices all of which were published in previous blocks.
+
+```{r, layout="l-body-outset"}
+tibble(
+  slot = c(2, 2, 3),
+  att_slot = c(1, 1, 1),
+  committee_index = c(1, 1, 1),
+  beacon_block = c("3e23", "3e23", "3e23"),
+  source_block = c("fa45", "fa45", "fa45"),
+  target_block = c("2b99", "2b99", "2b99"),
+  attesting_indices = c("100", "001", "101")
+) %>%
+  paged_table()
+```
+
+We find that `r n_redundant` aggregates are redundant out of `r n_aggregates` included in blocks.
+
+```{r}
+tibble(Name = c("Redundant aggregates", "Included aggregates", "Percent redundant",
+                "Myopic redundant aggregates", "Percent myopic among redundants"),
+       Value = c(n_redundant, n_aggregates, percent_redundant,
+                 n_myopic_redundant, percent_myopic_redundant_among_redundant)) %>%
+  paged_table()
+```
 
 ### How many times did a block include the exact same aggregate attestation more than once?
 
-We could call these **strongly redundant**, as this is pure waste.
+We could call these **strongly redundant**, as this is pure waste. In the example below, the same block includes twice the same aggregate.
+
+```{r, layout="l-body-outset"}
+tibble(
+  slot = c(2, 2),
+  att_slot = c(1, 1),
+  committee_index = c(1, 1),
+  beacon_block = c("3e23", "3e23"),
+  source_block = c("fa45", "fa45"),
+  target_block = c("2b99", "2b99"),
+  attesting_indices = c("101", "101")
+) %>%
+  paged_table()
+```
+
+Currently, we never see identical aggregates included twice in the same block.
 
 ```{r}
 n_strong_redundant_twice <- strong_redundant_ats %>%
@@ -453,16 +571,27 @@ strong_redundant_ats %>%
 
 <!-- We see that `r n_strong_redundant_twice` times, identical aggregates were included twice in the same block. -->
 
-Currently, we never see identical aggregates included twice in the same block.
-
 ### How many aggregates in a block are included by another aggregate in the same block?
 
-We now define **subset aggregates**. Suppose two aggregates in the same block with equal attributes (slot, committee index, beacon root, source root and target root) include validator sets $I$ and $J$ respectively. If we have $I \subset J$, i.e., if all validators of the first aggregate are also included in the second aggregate (but the reverse is not true), then we call the first aggregate a **subset aggregate** of the second.
+We now define **subset aggregates**. Suppose two aggregates in the same block with equal attributes (attestation slot, committee index, beacon root, source root and target root) include validator sets $I$ and $J$ respectively. If we have $I \subset J$, i.e., if all validators of the first aggregate are also included in the second aggregate (but the reverse is not true), then we call the first aggregate a **subset aggregate** of the second. In the example here, the second aggregate is a subset of the first.
 
-Subset aggregates, much like redundant aggregate attestations (equal aggregates included in more than one block of the canonical chain), can be removed from the finalised chain without losing any voting information. In fact, subset aggregates use much less local information than redundant aggregates. To root out subset aggregates, a client simply must ensure that no aggregate it is prepared to include in a block is a subset aggregate of another. Meanwhile, to root out redundant aggregates, a client must check all past blocks (until the inclusion limit of 32 slots) to ensure that it is not including a redundant aggregate. In a sense, subset aggregate are "worse" as they should be easier to root out.
+```{r, layout="l-body-outset"}
+tibble(
+  slot = c(2, 2),
+  att_slot = c(1, 1),
+  committee_index = c(1, 1),
+  beacon_block = c("3e23", "3e23"),
+  source_block = c("fa45", "fa45"),
+  target_block = c("2b99", "2b99"),
+  attesting_indices = c("111", "101")
+) %>%
+  paged_table()
+```
+
+Subset aggregates, like redundant aggregate attestations, can be removed from the finalised chain without losing any voting information. In fact, subset aggregates use much less local information than redundant aggregates. To root out subset aggregates, a client simply must ensure that no aggregate it is prepared to include in a block is a subset aggregate of another. Meanwhile, to root out redundant aggregates, a client must check all past blocks (until the inclusion limit of 32 slots) to ensure that it is not including a redundant aggregate. In a sense, subset aggregate are "worse" as they should be easier to root out.
 
 ```{r}
-subset_until_slot <- 8000
+subset_until_slot <- 32000
 ```
 
 So among all included aggregates in blocks, how many are subset aggregates? We count these instances for attestations included in blocks until epoch `r subset_until_slot %/% 32` (`r get_date_from_epoch(subset_until_slot %/% 32)` UTC).
@@ -503,8 +632,35 @@ tibble(Name = c("Subset aggregates of size 1", "Subset aggregates",
 
 We look at situations where two aggregate attestations are included in the same block, with identical attributes (same attesting slot, attesting committee, beacon chain head, source block and target block) but different attesting indices and neither one is a subset of the other. We define the following two notions, assuming the two aggregate attestations include attestations of validator sets $I$ and $J$ respectively:
 
-- **Strongly clashing:** The two aggregates share some validator indices, i.e., $I \cap J \neq \emptyset$. The two aggregate attestations were incompatible, so could not be aggregated further.
-- **Weakly clashing:** The two aggregates have different validator indices, i.e., $I \cap J = \emptyset$. The two aggregate attestations could have been aggregated further.
+- **Strongly clashing:** The two aggregates share some validator indices, i.e., $I \cap J \neq \emptyset$. The two aggregate attestations were incompatible, so could not be aggregated further. In the next example, the two aggregates are strongly clashing as the second attesting index is set to 1 for both, yet they each contain an attesting index the other does not have.
+
+```{r, layout="l-body-outset"}
+tibble(
+  slot = c(2, 2),
+  att_slot = c(1, 1),
+  committee_index = c(1, 1),
+  beacon_block = c("3e23", "3e23"),
+  source_block = c("fa45", "fa45"),
+  target_block = c("2b99", "2b99"),
+  attesting_indices = c("110", "011")
+) %>%
+  paged_table()
+```
+
+- **Weakly clashing:** The two aggregates have different validator indices, i.e., $I \cap J = \emptyset$. The two aggregate attestations could have been aggregated further. In the next example, the two aggregates are weakly clashing as they could have been aggregated further into attesting indices `111`.
+
+```{r, layout="l-body-outset"}
+tibble(
+  slot = c(2, 2),
+  att_slot = c(1, 1),
+  committee_index = c(1, 1),
+  beacon_block = c("3e23", "3e23"),
+  source_block = c("fa45", "fa45"),
+  target_block = c("2b99", "2b99"),
+  attesting_indices = c("101", "010")
+) %>%
+  paged_table()
+```
 
 Let's first count how many aggregates are strongly clashing in blocks before slot `r subset_until_slot`.
 
@@ -528,7 +684,7 @@ tibble(Name = c("Weakly clashing aggregates", "Included aggregates", "Percentage
   paged_table()
 ```
 
-None! That's pretty great. It means blocks always include the most aggregated possible attestations, and we have a local optimum to the aggregation problem.
+None! That's pretty great. It means blocks always include the most aggregated possible attestations, and we have a local optimum to the aggregation problem. It also means aggregators are doing a great job at producing the most succinct attestations possible, while, as we have seen, lately above 99% of the expected attestations are seen on-chain.
 
 Note that optimally aggregating a set of aggregates is NP-complete! Here is a reduction of the optimal aggregation problem to the [graph colouring](https://en.wikipedia.org/wiki/Graph_coloring). Set aggregate attestations as vertices in a graph, with an edge drawn between two vertices if the validator sets of the two aggregates have a non-empty overlap. In the graph colouring, we look for the minimum number of colours necessary to assign a colour to each vertex such that two connected vertices do not have the same colour. All vertices who share the same colour have an empty overlap, and thus can be combined into an aggregate. The minimum number of colours necessary to colour the graph tells us how few aggregates were necessary to combine a given set of aggregates further.
 
@@ -539,11 +695,6 @@ n_size_1_ags <- all_ats %>%
   .[, .(count=.N), by=contained_ats] %>%
   pull(count) %>%
   pluck(1)
-n_myopic_redundant <- myopic_redundant_ats %>%
-  filter(appearances > 1) %>%
-  pull(count) %>%
-  sum()
-percent_myopic_redundant <- round(n_myopic_redundant / n_aggregates, digits=4) * 100
 percent_size_one <- round(n_size_1_ags / n_aggregates, digits=4) * 100
 ```
 
@@ -555,8 +706,8 @@ We've looked at aggregate attestations in a few different ways. We offer here a 
 | Aggregate | Attestation summarising the vote of validators in a single committee | There are `r n_aggregates` aggregates included from slot 0 to slot `r until_slot` | x |
 | Individual attestation | A single, unique, validator vote | There are `r n_individual_ats` individual attestations | x |
 | Savings ratio | The ratio of individual attestations to aggregate attestations | The savings ratio is `r savings_ratio` | Keep it up! |
-| Redundant aggregate | An aggregate containing validator attestations which were all already included on-chain, possibly across several aggregates with different sets of attesting indices | x | Don't include these |
-| Myopic redundant aggregate | An aggregate included more than once on-chain, always with the same attesting indices | There are `r n_myopic_redundant` myopic redundant aggregates, `r percent_myopic_redundant`% of all aggregates | These are redundant too: don't include them either |
+| Redundant aggregate | An aggregate containing validator attestations which were all already included on-chain, possibly across several aggregates with different sets of attesting indices | There are `r n_redundant` redundant aggregates included, `r percent_redundant`% of all aggregates | Don't include these |
+| Myopic redundant aggregate | An aggregate included more than once on-chain, always with the same attesting indices | There are `r n_myopic_redundant` myopic redundant aggregates, `r percent_myopic_redundant_among_redundant`% of all redundant aggregates and `r percent_myopic_redundant`% of all aggregates | These are redundant too: don't include them either |
 :::
 
 In the next table, we present definitions classifying aggregates when two or more instances are included _in the same block_ with the same five attributes (attesting slot and committee, beacon root, source root and target root).
