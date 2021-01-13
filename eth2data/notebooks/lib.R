@@ -234,11 +234,12 @@ find_client <- function(graffiti) {
   )
 }
 
-get_block_at_slot <- function(slot) {
-  get_block_and_attestations_at_slot()$block
+get_block_at_slot <- function(slot, url="http://192.168.1.172:5052") {
+  get_block_and_attestations_at_slot(url)$block
 }
 
 get_block_and_attestations_at_slot <- function(slot, url="http://192.168.1.172:5052") {
+  # print(str_c("Blocks and attestations of slot ", slot, "\n"))
   block <- content(GET(str_c(url, "/eth/v1/beacon/blocks/", slot)))$data$message
   
   if (as.numeric(block$slot) != slot) {
@@ -286,12 +287,12 @@ get_block_and_attestations_at_slot <- function(slot, url="http://192.168.1.172:5
   )
 }
 
-get_blocks_and_attestations <- function(epoch) {
+get_blocks_and_attestations <- function(epoch, url="http://192.168.1.172:5052") {
   print(str_c("Blocks and attestations of epoch ", epoch, "\n"))
   start_slot <- epoch * slots_per_epoch
   end_slot <- (epoch + 1) * slots_per_epoch - 1
   start_slot:end_slot %>%
-    map(get_block_and_attestations_at_slot) %>%
+    map(function(epoch) { get_block_and_attestations_at_slot(epoch, url) }) %>%
     keep(is.list) %>%
     purrr::transpose() %>%
     map(rbindlist)
@@ -308,7 +309,7 @@ get_blocks <- function(epoch) {
 
 get_block_root_at_slot <- function(all_bxs) {
   tibble(
-    slot = 0:max(all_bxs$slot)
+    slot = min(all_bxs$slot):max(all_bxs$slot)
   ) %>%
     left_join(
       all_bxs %>% select(slot, block_root),
@@ -320,7 +321,7 @@ get_block_root_at_slot <- function(all_bxs) {
 
 get_first_possible_inclusion_slot <- function(all_bxs) {
   tibble(
-    slot = 0:max(all_bxs$slot)
+    slot = min(all_bxs$slot):max(all_bxs$slot)
   ) %>%
     left_join(
       all_bxs %>%
@@ -342,7 +343,7 @@ get_correctness_data <- function(t, block_root_at_slot) {
 }
 
 get_stats_per_val <- function(all_ats, block_root_at_slot, first_possible_inclusion_slot,
-                              committees = NULL, validators = NULL, chunk_size = 10) {
+                              committees = NULL, validators = NULL, chunk_size = 10, url="http://192.168.1.172:5052") {
   min_epoch <- min(all_ats$att_slot) %/% 32
   max_epoch <- max(all_ats$att_slot) %/% 32
   print(str_c("Min epoch ", min_epoch, ", max epoch ", max_epoch))
@@ -351,12 +352,12 @@ get_stats_per_val <- function(all_ats, block_root_at_slot, first_possible_inclus
       print(str_c("Epoch ", epoch))
       if (is.null(committees)) {
         committees <- epoch:(epoch + chunk_size - 1) %>%
-          map(get_committees) %>%
+          map(function(epoch) { get_committees(epoch, url) }) %>%
           rbindlist()
       }
       
       if (is.null(validators)) {
-        validators <- get_validators(epoch + chunk_size - 1)[time_active > 0, .(validator_index, time_active)]
+        validators <- get_validators(epoch + chunk_size - 1, url)[time_active > 0, .(validator_index, time_active)]
       }
       
       t <- copy(all_ats[(att_slot >= epoch * slots_per_epoch) & (att_slot < (epoch + chunk_size) * slots_per_epoch)])
@@ -480,6 +481,19 @@ get_myopic_redundant_ats_detail <- function(all_ats) {
 # ) %>%
 #   as.data.table()
 # get_myopic_redundant_ats_detail(test_myopic_redundant_ats) %>% glimpse()
+
+# test_not_myopic_redundant_ats <- tibble(
+#   att_slot = c(1, 1),
+#   committee_index = c(1, 1),
+#   slot = c(2, 3),
+#   beacon_block_root = c("a", "a"),
+#   source_block_root = c("a", "a"),
+#   target_block_root = c("a", "a"),
+#   attesting_indices = c("101", "100")
+# ) %>%
+#   as.data.table()
+# get_myopic_redundant_ats_detail(test_not_myopic_redundant_ats) %>% glimpse()
+
 
 get_redundant_ats <- function(all_ats) {
   t <- copy(all_ats)
