@@ -113,6 +113,21 @@ validators %>%
 
 We have identified the client of `r nrow(validators)` validators, out of `r nrow(all_bxs)` blocks produced.
 
+```{r}
+all_bxs[, .(client=declared_client, graffiti)][
+  client != "undecided" & client != "lodestar" & str_starts(graffiti, "poap")
+] %>%
+  unique() %>%
+  .[, .(count=.N), by=.(client)] %>%
+  ggplot() +
+  geom_col(aes(x = client, y = count, fill=client)) +
+  scale_fill_manual(name = "Client", values=client_colours) +
+  ggtitle("Distribution of clients in the dataset") +
+  xlab("Declared client") +
+  ylab("Count")
+```
+
+
 ## Client performance
 
 ### Correctness by slot index

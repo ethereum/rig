@@ -70,8 +70,8 @@ epochs_per_year <- slots_per_year / slots_per_epoch
 
 ```{r eval=FALSE}
 # Run this to add to the dataset
-start_epoch <- 931
-end_epoch <- 1040
+start_epoch <- 1041
+end_epoch <- 4420
 
 all_bxs <- fread(here::here("mainnet_data/all_bxs.csv"))
 all_ats <- fread(here::here("mainnet_data/all_ats.csv"))
@@ -121,13 +121,13 @@ new_stats_per_slot <- get_stats_per_slot(
 list(stats_per_slot, new_stats_per_slot) %>% rbindlist() %>% fwrite(here::here("mainnet_data/stats_per_slot.csv"))
 rm(new_stats_per_slot)
 
-get_exploded_ats(all_ats[att_slot < 1000 * 32])[
-  , .(inclusion_delay=min(slot)-att_slot),
-  by=.(att_slot, committee_index, index_in_committee,
-       beacon_block_root, source_block_root, target_block_root)
-][
-  , .(count=.N), by=.(inclusion_delay)
-] %>% fwrite(here::here("mainnet_data/inclusion_delay.csv"))
+# get_exploded_ats(all_ats[att_slot < 1000 * 32])[
+#   , .(inclusion_delay=min(slot)-att_slot),
+#   by=.(att_slot, committee_index, index_in_committee,
+#        beacon_block_root, source_block_root, target_block_root)
+# ][
+#   , .(count=.N), by=.(inclusion_delay)
+# ] %>% fwrite(here::here("mainnet_data/inclusion_delay.csv"))
 ```
 
 ```{r eval=FALSE}
@@ -148,7 +148,6 @@ get_exploded_ats(all_ats[att_slot < 1000 * 32])[
 
 ```{r cache=TRUE, cache.lazy=FALSE}
 all_bxs <- fread(here::here("mainnet_data/all_bxs.csv"))[slot < end_epoch * slots_per_epoch]
-all_ats <- fread(here::here("mainnet_data/all_ats.csv"))[att_slot < end_epoch * slots_per_epoch]
 block_root_at_slot <- get_block_root_at_slot(all_bxs)
 get_correctness_data(all_ats, block_root_at_slot)
 stats_per_slot <- fread(here::here("mainnet_data/stats_per_slot.csv"))[att_slot < end_epoch * slots_per_epoch]
