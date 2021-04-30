@@ -144,11 +144,10 @@ test_ops_ats <- function(fn, dataset = "individual") {
     fn()
 }
 
-epoch <- 1
 get_committees <- function(epoch, url="http://192.168.1.172:5052") {
-  # print(str_c("Getting committee of epoch ", epoch, "\n"))
+  print(str_c("Getting committee of epoch ", epoch, "\n"))
   content(GET(str_c(url, "/eth/v1/beacon/states/",
-            epoch * slots_per_epoch, "/committees")))$data %>%
+            epoch * slots_per_epoch, "/committees"), accept_json()))$data %>%
     rbindlist() %>%
     .[,.(att_slot = as.numeric(slot),
          committee_index = as.numeric(index),
@@ -221,7 +220,7 @@ hex2string <- function(string) {
 find_client <- function(graffiti) {
   case_when(
     (str_starts(graffiti, "poap") & str_ends(graffiti, "a")) |
-      str_detect(graffiti, "prysm") ~ "prysm",
+      str_detect(graffiti, "prysm") | graffiti == "" ~ "prysm",
     (str_starts(graffiti, "poap") & str_ends(graffiti, "b")) |
       str_detect(graffiti, "lighthouse") ~ "lighthouse",
     (str_starts(graffiti, "poap") & str_ends(graffiti, "c")) |
@@ -240,8 +239,7 @@ get_block_at_slot <- function(slot, url="http://192.168.1.172:5052") {
 
 get_block_and_attestations_at_slot <- function(slot, url="http://192.168.1.172:5052") {
   # print(str_c("Blocks and attestations of slot ", slot, "\n"))
-  block <- content(GET(str_c(url, "/eth/v1/beacon/blocks/", slot)))$data$message
-  
+  block <- content(GET(str_c(url, "/eth/v1/beacon/blocks/", slot), accept_json()))$data$message
   if (as.numeric(block$slot) != slot) {
     return(NULL)
   }
@@ -357,7 +355,9 @@ get_stats_per_val <- function(all_ats, block_root_at_slot, first_possible_inclus
       }
       
       if (is.null(validators)) {
-        validators <- get_validators(epoch + chunk_size - 1, url)[time_active > 0, .(validator_index, time_active)]
+        validators <- get_validators(epoch + chunk_size - 1, url)[
+          (time_active > 0 & exit_epoch > epoch), .(validator_index, time_active, exit_epoch, balance)
+        ]
       }
       
       t <- copy(all_ats[(att_slot >= epoch * slots_per_epoch) & (att_slot < (epoch + chunk_size) * slots_per_epoch)])
@@ -373,11 +373,11 @@ get_stats_per_val <- function(all_ats, block_root_at_slot, first_possible_inclus
               inclusion_delay_by_block=mean(inclusion_delay_by_block)),
           by=validator_index
         ] %>%
-        .[validators[, .(validator_index, time_active)], on=c("validator_index")] %>%
+        .[validators[, .(validator_index, time_active, balance)], on=c("validator_index")] %>%
         setnafill("const", 0, cols=c("included_ats", "correct_targets", "correct_heads")) %>%
         .[, .(validator_index, epoch = epoch + chunk_size, expected_ats=chunk_size,
               included_ats, correct_targets, correct_heads,
-              inclusion_delay, inclusion_delay_by_block)]
+              inclusion_delay, inclusion_delay_by_block, balance)]
     }) %>%
     rbindlist()
 }
