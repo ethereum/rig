@@ -8,7 +8,7 @@ Ongoing effort to produce an incentives-focused testing environment for the beac
 
 **==> [Beacon runner repo](https://github.com/ethereum/beaconrunner) <==**
 
-## [eip1559](eip1559)
+## eip1559
 
 Simulations and analysis of transaction fee markets.
 
@@ -30,6 +30,12 @@ Data analysis and bias confirmations.
 ## [eth2data](eth2data)
 
 Beacon chain and validator analytics.
+
+- [Code library](eth2data/notebooks/lib.R)
+
+## Beacon chain April 2021 incident
+
+- [Blog post](https://barnabe.substack.com/p/a-data-driven-view-of-the-beacon) + [Script](eth2data/script/20210424_plots.R)
 
 ### Mainnet data analysis
 
