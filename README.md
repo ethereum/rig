@@ -33,7 +33,7 @@ Beacon chain and validator analytics.
 
 - [Code library](eth2data/notebooks/lib.R)
 
-## Beacon chain April 2021 incident
+### Beacon chain April 2021 incident
 
 - [Blog post](https://barnabe.substack.com/p/a-data-driven-view-of-the-beacon) + [Script](eth2data/script/20210424_plots.R)
 
