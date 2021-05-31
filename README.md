@@ -22,7 +22,7 @@ Simulations and analysis of transaction fee markets.
 
 ## [ethdata](ethdata)
 
-Data analysis and bias confirmations.
+Data analysis and bias confirmations. 
 
 - [Exploring blocks, gas and transactions](https://ethereum.github.io/rig/ethdata/notebooks/explore_data.html) + [source](ethdata/notebooks/explore_data.Rmd)
 - [Gas weather report, July 21st-July 27th](https://ethereum.github.io/rig/ethdata/notebooks/gas_weather_reports/exploreJuly21.html) + [source](ethdata/notebooks/gas_weather_reports/exploreJuly21.Rmd)
@@ -33,7 +33,7 @@ Beacon chain and validator analytics.
 
 - [Code library](eth2data/notebooks/lib.R)
 
-### Beacon chain April 2021 incident 
+### Beacon chain April 2021 incident
 
 - [Blog post](https://barnabe.substack.com/p/a-data-driven-view-of-the-beacon) + [Script](eth2data/script/20210424_plots.R)
 
