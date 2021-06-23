@@ -51,6 +51,12 @@ Beacon chain and validator analytics.
 
 - [Exploring Medalla](https://ethereum.github.io/rig/eth2data/notebooks/medalla_explore.html)
 
+## Beacon Digest
+
+Explorations of the beacon chain.
+
+**==> [Beacon digest repo](https://github.com/SHSR2001/beacondigest) <==**
+
 ## Talks
 
 Meet the RIG and check our previous talks!
