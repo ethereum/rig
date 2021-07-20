@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Robust Incentives Group homepage</title>
+  <meta property="og:title" content="Beacon Runner" />
+  <meta property="og:url" content="https://ethereum.github.io/beaconrunner" />
+  <meta property="og:image" content="https://ethereum.github.io/rig/static/rig.png" />
+  <meta property="og:description" content="Agent-based simulations of PoS Ethereum" />
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Beacon Runner">
+  <meta name="twitter:description" content="Agent-based simulations of PoS Ethereum">
+  <meta name="twitter:image" content="https://ethereum.github.io/rig/static/rig.png">
+  <!--[if lt IE 9]>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv-printshiv.min.js"></script>
+  <![endif]-->
+  <script src="https://cdn.jsdelivr.net/npm/underscore@1.13.1/underscore-umd-min.js" type="text/javascript"></script>
+  <script src="https://ethereum.github.io/rig/static/react.development.js"></script>
+  <script src="https://ethereum.github.io/rig/static/react-dom.development.js"></script>
+  <script src="https://ethereum.github.io/rig/static/component-library.js"></script>
+  <script src="https://ethereum.github.io/rig/static/header.js"></script>
+  <script src="static/header.js"></script>
+  <script src="https://ethereum.github.io/rig/static/footer.js"></script>
+  <link rel="stylesheet" type="text/css" href="https://ethereum.github.io/rig/static/index.css"/>
+</head>
+<body>
+<div id="rig-header"></div>
+  <script>
+  ReactDOM.render(
+    e(Header, null),
+    document.querySelector("#rig-header")
+  );
+  const hamburger = document.querySelector(".hamburger");
+  const navMenu = document.querySelector(".nav-menu");
+
+  hamburger.addEventListener("click", mobileMenu);
+
+  function mobileMenu() {
+      hamburger.classList.toggle("active");
+      navMenu.classList.toggle("active");
+  }
+  </script>
+  <div class="article-container">
+    <div class="document-container">
+      <div class="title-container">
+                  <div class="title">
+            Robust Incentives Group homepage
+          </div>
+        
+              </div>
+                        <p>Find our projects and releases in this repo!</p>
+                        <h2 id="beacon-runner">Beacon Runner</h2>
+                        <p>Ongoing effort to produce an incentives-focused testing environment for the consensus layer.</p>
+                        <ul>
+                        <li><a href="https://ethereum.github.io/beaconrunner">Beacon Runner homepage</a></li>
+                        <li><a href="https://github.com/ethereum/beaconrunner">Beacon Runner repo</a></li>
+                        </ul>
+                        <h2 id="eip1559">eip1559</h2>
+                        <p>Simulations and analysis of transaction fee markets.</p>
+                        <ul>
+                        <li><a href="https://ethereum.github.io/abm1559">abm1559 website</a></li>
+                        <li><a href="https://github.com/ethereum/abm1559">abm1559 repo</a></li>
+                        </ul>
+                        <h2 id="ethdata"><a href="ethdata">ethdata</a></h2>
+                        <p>Data analysis and bias confirmations for the execution layer.</p>
+                        <ul>
+                        <li><a href="https://ethereum.github.io/rig/ethdata/notebooks/explore_data.html">Exploring blocks, gas and transactions</a> + <a href="ethdata/notebooks/explore_data.Rmd">source</a></li>
+                        <li><a href="https://ethereum.github.io/rig/ethdata/notebooks/gas_weather_reports/exploreJuly21.html">Gas weather report, July 21st-July 27th</a> + <a href="ethdata/notebooks/gas_weather_reports/exploreJuly21.Rmd">source</a></li>
+                        </ul>
+                        <h2 id="posdata"><a href="posdata">posdata</a></h2>
+                        <p>Consensus layer and validator analytics.</p>
+                        <ul>
+                        <li><a href="eth2data/notebooks/lib.R">Code library</a></li>
+                        </ul>
+                        <h3 id="beacon-chain-april-2021-incident">Beacon chain April 2021 incident</h3>
+                        <ul>
+                        <li><a href="https://barnabe.substack.com/p/a-data-driven-view-of-the-beacon">Blog post</a> + <a href="eth2data/script/20210424_plots.R">Script</a></li>
+                        </ul>
+                        <h3 id="mainnet-data-analysis">Mainnet data analysis</h3>
+                        <ul>
+                        <li><a href="https://ethereum.github.io/rig/eth2data/notebooks/mainnet_explore.html">Exploring Mainnet</a></li>
+                        <li><a href="https://ethereum.github.io/rig/eth2data/notebooks/mainnet_compare.html">Mainnet client comparison</a></li>
+                        </ul>
+                        <h3 id="pyrmont-data-analysis">Pyrmont data analysis</h3>
+                        <ul>
+                        <li><a href="https://ethereum.github.io/rig/eth2data/notebooks/pyrmont_explore.html">Exploring Pyrmont</a></li>
+                        <li><a href="https://ethereum.github.io/rig/eth2data/notebooks/pyrmont_compare.html">Pyrmont client comparison</a></li>
+                        </ul>
+                        <h3 id="medalla-data-analysis">Medalla data analysis</h3>
+                        <ul>
+                        <li><a href="https://ethereum.github.io/rig/eth2data/notebooks/medalla_explore.html">Exploring Medalla</a></li>
+                        </ul>
+                        <h2 id="talks">Talks</h2>
+                        <p>Meet the RIG and check our previous talks!</p>
+                        <table>
+                        <colgroup>
+                        <col style="width: 25%" />
+                        <col style="width: 25%" />
+                        <col style="width: 25%" />
+                        <col style="width: 25%" />
+                        </colgroup>
+                        <thead>
+                        <tr class="header">
+                        <th>Talk</th>
+                        <th>Location</th>
+                        <th>Date</th>
+                        <th>Link</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr class="odd">
+                        <td>Protocol cryptoeconomics with the RIG</td>
+                        <td>EthCC[4]</td>
+                        <td>20 July 2021</td>
+                        <td><a href="">Video</a> + <a href="assets/pdf/ethcc2021.pdf">Slides</a></td>
+                        </tr>
+                        <tr class="even">
+                        <td>Ethereum : Un protocole en mutation</td>
+                        <td>EthCC[4]</td>
+                        <td>20 July 2021</td>
+                        <td></td>
+                        </tr>
+                        <tr class="odd">
+                        <td>PEEPanEIP #37: EIP-1559: Fee market change with Tim Beiko, Barnabé Monnot, Micah Zoltu</td>
+                        <td>Ethereum Cat Herders</td>
+                        <td>21 June 2021</td>
+                        <td><a href="https://www.youtube.com/watch?v=AC1FS3LmoT4">Video</a> + <a href="https://docs.google.com/presentation/d/1vVGaezpoj-sYPPBNSY0LdPyJGIex2zl1cdgipVoMkL0/edit?usp=sharing">Slides</a></td>
+                        </tr>
+                        <tr class="even">
+                        <td>The road to Ethereum</td>
+                        <td>Online (SUTD)</td>
+                        <td>9 April 2021</td>
+                        <td><a href="https://barnabe.substack.com/p/eth2">Blog post</a></td>
+                        </tr>
+                        <tr class="odd">
+                        <td>En route pour eip1559</td>
+                        <td>Online (Ethereum France, in French)</td>
+                        <td>10 November 2020</td>
+                        <td><a href="https://www.youtube.com/watch?v=p8M5RpiUG8o">Video</a> + <a href="https://docs.google.com/presentation/u/1/d/1MuO7egGTleSXrYcQH9B6IZ-NrMNyTPmypLb4MN9d9SE/edit?usp=sharing">Slides</a></td>
+                        </tr>
+                        <tr class="even">
+                        <td>Strategic issues in EIP 1559</td>
+                        <td>Online (ETHTaipei)</td>
+                        <td>15 October 2020</td>
+                        <td><a href="https://www.youtube.com/watch?v=3pErNDU5BiE">Video</a> + <a href="https://docs.google.com/presentation/d/1AHQAgLqAIsiF_Vd2pcYaMBvg0v8d-01_yzsWJLOLj4I/edit">Slides</a></td>
+                        </tr>
+                        <tr class="odd">
+                        <td>Ethereum’s new transaction fee market design, EIP 1559</td>
+                        <td>Online (SUTD)</td>
+                        <td>25 September 2020</td>
+                        <td><a href="assets/pdf/notes-georgios.pdf">Notes/slides</a></td>
+                        </tr>
+                        <tr class="even">
+                        <td>cadCAD community call #2</td>
+                        <td>Online</td>
+                        <td>28 August 2020</td>
+                        <td><a href="https://www.youtube.com/watch?v=SVNNvTiIKlg">Video</a> + <a href="https://docs.google.com/presentation/d/13PHT4fIw7g_fhOfkagZRyxjeVO8dM3z6zjRMQkY0j1U/edit?usp=sharing">Slides</a></td>
+                        </tr>
+                        <tr class="odd">
+                        <td>Eth Magicians EIP 1559 panel</td>
+                        <td>Online</td>
+                        <td>29 July 2020</td>
+                        <td><a href="https://www.youtube.com/watch?v=kNSpugOwQ1o">Video</a></td>
+                        </tr>
+                        <tr class="even">
+                        <td>RIG Bouillabaisse</td>
+                        <td>EthCC[3]</td>
+                        <td>3 March 2020</td>
+                        <td><a href="assets/pdf/rig-ethcc.pdf">Slides</a></td>
+                        </tr>
+                        <tr class="odd">
+                        <td>OpenSUTD Blockchain development IAP</td>
+                        <td>SUTD</td>
+                        <td>16 January 2020</td>
+                        <td><a href="https://docs.google.com/presentation/d/10LR57HTiSs-8pBpNeXKoJ13zOPxzOrLI8Avs3FSDsz0/edit?usp=sharing">Slides</a></td>
+                        </tr>
+                        </tbody>
+                        </table>
+      </body>
+</html>

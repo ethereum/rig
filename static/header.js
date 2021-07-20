@@ -4,14 +4,14 @@ class Header extends React.Component {
 
     return (
       e(
-        'div', {	className: 'header' },
+        'div', {	className: 'rig-header' },
         e(
           "div", { className: "header-container" },
           e('a', { href: 'https://github.com/ethereum/rig', className: 'nav-logo' }, "Robust Incentives Group"),
           e(
             'ul', { className: "nav-menu" },
             e('li', { className: 'nav-item' }, e('a', { href: 'https://ethereum.github.io/abm1559' }, "eip1559")),
-            e('li', { className: 'nav-item' }, e('a', { href: 'https://ethereum.github.io/beaconrunner' }, "eth2")),
+            e('li', { className: 'nav-item' }, e('a', { href: 'https://ethereum.github.io/beaconrunner' }, "PoS")),
             e('li', { className: 'nav-item' }, e('a', { href: 'https://shsr2001.github.io/beacondigest' }, "beacondigest")),
           ),
           e(

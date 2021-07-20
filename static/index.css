@@ -64,23 +64,14 @@ body {
   margin: 0;
 }
 
-/* .header {
-  height: 4rem;
-  width: 100%;
-  background: steelblue;
-  display: flex;
-  align-items: center;
-} */
-
-* {
+.rig-header {
     margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
-.header{
     border-bottom: 1px solid #E2E8F0;
     background: steelblue;
+}
+
+.rig-header ul {
+  margin: 0;
 }
 
 .header-container {
@@ -90,38 +81,16 @@ body {
     padding: 1rem 1.5rem;
 }
 
-/* .header-left-element {
-  font-size: 16px;
-  flex-grow: 1;
-  font-family: "Menlo", monospace, monospace;
-}
-
-.header-right-elements {
-  display: flex;
-}
-
-.header-right-element {
-  font-size: 16px;
-  font-family: "Menlo", monospace, monospace;
-  margin-left: 30px;
-}
-
-@media screen and (max-width: 340px) {
-  .header-left-element {
-    font-size: 14px;
-  }
-} */
-
 .hamburger {
     display: none;
 }
 
-.header a {
+.rig-header a {
   text-decoration: none;
   color: white;
 }
 
-.header li {
+.rig-header li {
     list-style: none;
 }
 
@@ -151,8 +120,15 @@ body {
   font-family: "Menlo", monospace, monospace;
 }
 
+.rig-header li {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+}
+
 @media only screen and (max-width: 768px) {
     .nav-menu {
+        padding-left: 0;
         position: fixed;
         left: -100%;
         top: 4rem;
@@ -332,6 +308,14 @@ ul {
   margin-right: 10px;
   text-decoration: underline;
 } */
+
+table .odd {
+  background-color: #eeeef9;
+}
+
+th, td {
+  padding: 5px;
+}
 
 table.data-table {
   padding-top: 1rem;

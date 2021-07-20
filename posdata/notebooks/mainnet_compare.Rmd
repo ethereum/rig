@@ -1,0 +1,497 @@
+---
+title: "Mainnet client comparison"
+author:
+- name: Barnabé Monnot
+  url: https://twitter.com/barnabemonnot
+  affiliation: Robust Incentives Group, Ethereum Foundation
+  affiliation_url: https://github.com/ethereum/rig
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    toc: yes
+    toc_depth: 3
+  html_document:
+    toc: yes
+    toc_depth: '3'
+    df_print: paged
+description: |
+  Diving into client performance.
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(data.table)
+library(rmarkdown)
+library(infer)
+
+source(here::here("notebooks/lib.R"))
+
+options(digits=10)
+options(scipen = 999) 
+
+# Make the plots a bit less pixellated
+knitr::opts_chunk$set(dpi = 300)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+
+# A minimal theme I like
+newtheme <- theme_grey() + theme(
+  axis.text = element_text(size = 9),
+  axis.title = element_text(size = 12),
+  axis.line = element_line(colour = "#000000"),
+  panel.grid.major.y = element_line(colour="#bbbbbb", size=0.1),
+  panel.grid.major.x = element_blank(),
+  panel.grid.minor = element_blank(),
+  panel.background = element_blank(),
+  legend.title = element_text(size = 12),
+  legend.text = element_text(size = 10),
+  legend.box.background = element_blank(),
+  legend.key = element_blank(),
+  strip.text.x = element_text(size = 10),
+  strip.background = element_rect(fill = "white")
+)
+theme_set(newtheme)
+
+myred <- "#F05431"
+myyellow <- "#FED152"
+mygreen <- "#BFCE80"
+client_colours <- c("#000011", "#ff9a02", "#eb4a9b", "#7dc19e")
+
+end_epoch <- 1000
+slots_per_epoch <- 32
+until_slot <- (end_epoch + 1) * slots_per_epoch - 1
+slot_chunk_res <- until_slot %/% 15
+slots_per_year <- 365.25 * 24 * 60 * 60 / 12
+epochs_per_year <- slots_per_year / slots_per_epoch
+```
+
+```{r cache=TRUE}
+all_bxs <- fread(here::here("mainnet_data/all_bxs.csv"))[slot < end_epoch * slots_per_epoch]
+all_ats <- fread(here::here("mainnet_data/all_ats.csv"))[att_slot < end_epoch * slots_per_epoch]
+block_root_at_slot <- get_block_root_at_slot(all_bxs)
+get_correctness_data(all_ats, block_root_at_slot)
+all_myopic_redundant_ats <- get_myopic_redundant_ats_detail(all_ats)
+redundant_ats <- get_redundant_ats(all_ats)
+subset_ats <- fread(here::here("mainnet_data/subset_ats.csv"))[slot < end_epoch * slots_per_epoch]
+val_series <- fread(here::here("mainnet_data/val_series.csv"))[epoch <= end_epoch]
+stats_per_slot <- fread(here::here("mainnet_data/stats_per_slot.csv"))[att_slot < end_epoch * slots_per_epoch]
+```
+
+This report was compiled with data until epoch `r end_epoch` (`r get_date_from_epoch(end_epoch)` UTC). We look at the performance of validators who self-declared their client, either writing the client name in their graffiti or with the POAP tag.
+
+<aside>
+All code available [here](https://github.com/ethereum/rig/blob/master/eth2data/notebooks/mainnet_compare.Rmd).
+</aside>
+
+## Client distribution
+
+Declared client is obtained in the graffiti of produced blocks:
+
+- Either when the graffiti starts with `poap` and ends with `a`, `b`, `c`, `d` and `e` (respectively, Prysm, Lighthouse, Teku, Nimbus and Lodestar).
+- Or when the graffiti contains the client name in its string (e.g., `teku/v20.11.1`).
+
+Since the chain started recently, we do not have a lot of graffitis to scrape from. Additionally, not all graffitis feature the client name or the poap (thanks, Mr. F). This analysis is carried over self-declared clients then.
+
+```{r}
+validators <- all_bxs[, .(validator_index = proposer_index, client = declared_client)][
+  client != "undecided" & client != "lodestar"
+] %>%
+  unique()
+```
+
+```{r}
+validators %>%
+  .[, .(client)] %>%
+  .[, .(count=.N), by=.(client)] %>%
+  ggplot() +
+  geom_col(aes(x = client, y = count, fill=client)) +
+  scale_fill_manual(name = "Client", values=client_colours) +
+  ggtitle("Distribution of clients in the dataset") +
+  xlab("Declared client") +
+  ylab("Count")
+```
+
+We have identified the client of `r nrow(validators)` validators, out of `r nrow(all_bxs)` blocks produced.
+
+```{r}
+all_bxs[, .(client=declared_client, graffiti)][
+  client != "undecided" & client != "lodestar" & str_starts(graffiti, "poap")
+] %>%
+  unique() %>%
+  .[, .(count=.N), by=.(client)] %>%
+  ggplot() +
+  geom_col(aes(x = client, y = count, fill=client)) +
+  scale_fill_manual(name = "Client", values=client_colours) +
+  ggtitle("Distribution of clients in the dataset") +
+  xlab("Declared client") +
+  ylab("Count")
+```
+
+
+## Client performance
+
+### Correctness by slot index
+
+It's close, but we observe a more incorrect head attestations when the attestation is made for the starting slot of a new epoch. We name `slot_index` the index of the slot in the epoch (from 0 to 31).
+
+```{r}
+stats_per_slot[
+  , .(percent_correct_heads = sum(correct_heads) / sum(included_ats) * 100),
+  by= .(slot_index=att_slot%%32)
+] %>%
+  ggplot() +
+  geom_col(aes(x = slot_index, y = percent_correct_heads), fill=myred) +
+  xlab("Slot index") +
+  ylab("Percent of correct head attestations")
+```
+
+Attesters get the head wrong whenever the block they are supposed to attest for is late, and comes much after the attestation was published. We can check which clients are producing these late blocks.
+
+<aside>
+Note that there is a similar issue with targets, since the first block of a new epoch is also likely the candidate target checkpoint.
+
+```{r}
+stats_per_slot[
+  , .(percent_correct_targets = sum(correct_targets) / sum(included_ats) * 100),
+  by= .(slot_index=att_slot%%32)
+] %>%
+  ggplot() +
+  geom_col(aes(x = slot_index, y = percent_correct_targets), fill=myred) +
+  xlab("Slot index") +
+  ylab("Correct targets")
+```
+</aside>
+
+```{r}
+stats_per_slot[
+  all_bxs[
+    validators[, .(validator_index, client)],
+    on=c("proposer_index" = "validator_index"),
+    nomatch=NULL,
+    .(slot, client)
+  ],
+  on = c("att_slot" = "slot"),
+  nomatch=NULL
+][
+  , .(percent_correct_heads = sum(correct_heads) / sum(included_ats) * 100),
+  by= .(slot_index=att_slot%%32, client)
+] %>%
+  ggplot() +
+  geom_col(aes(x = slot_index, y = percent_correct_heads, fill=client)) +
+  scale_fill_manual(name="Client", values=client_colours) +
+  facet_wrap(vars(client)) +
+  xlab("Slot index") +
+  ylab("Percent of correct head attestations")
+```
+
+Since these late blocks seem to happen more often at the start of an epoch than at the end, it is quite clear that epoch processing is at fault, with some clients likely spending more time processing the epoch and unable to publish the block on time.
+
+We can also check over time how the performance of validators on blocks at slot index 0 evolves, again plotting per client who is expected to produce the block at slot index 0.
+
+```{r}
+chunk_size <- 20
+stats_per_slot[
+  all_bxs[
+    validators[, .(validator_index, client)],
+    on=c("proposer_index" = "validator_index"),
+    nomatch=NULL,
+    .(slot, client)
+  ],
+  on = c("att_slot" = "slot"),
+  nomatch=NULL
+][
+  att_slot%%32==0, .(percent_correct_heads = sum(correct_heads) / sum(expected_ats) * 100),
+  by= .(epoch_chunk=(att_slot%/%32)%/%chunk_size, client)
+] %>%
+  ggplot() +
+  geom_line(aes(x = epoch_chunk * chunk_size, y = percent_correct_heads, group=client, color=client)) +
+  scale_color_manual(name="Client", values=client_colours) +
+  xlab("Epoch") +
+  ylab("Percent of correct head attestations") +
+  ggtitle("Head correctness per slot index 0 client proposer")
+```
+
+## Attestations over time
+
+In the plots below, we align on the y-axis validators activated at genesis. A point on the plot is coloured in green when the validator has managed to get their attestation included for the epoch given on the x-axis. Otherwise, the point is coloured in red. Note that we do not check for the correctness of the attestation, merely its presence in some block of the beacon chain.
+
+The plots allow us to check when a particular client is experiencing issues, at which point some share of validators of that client will be unable to publish their attestations.
+
+```{r}
+get_grid_per_client <- function(val_series, selected_client) {
+  val_series[client == selected_client] %>%
+    mutate(validator_index = as.factor(validator_index)) %>%
+    ggplot() +
+    geom_tile(aes(x = epoch, y = validator_index, fill = included_ats)) +
+    scale_fill_gradient(low = myred, high = mygreen, na.value = NA,
+                        limits = c(0, max(val_series$included_ats)),
+                        guide = FALSE) +
+    scale_x_continuous(expand = c(0, 0)) +
+    xlab("Epoch") +
+    ylab("Validators") +
+    theme(axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+          panel.background=element_rect(fill=myred, colour=myred),
+          axis.title.x = element_text(size = 6),
+          axis.title.y = element_text(size = 6),
+          axis.text.x = element_text(size = 6),
+          strip.text = element_text(size = 7))
+}
+
+plot_grid <- function(start_epoch, end_epoch, committees = NULL) {
+  l <- c("prysm", "lighthouse", "nimbus", "teku") %>%
+    map(function(client) {
+      get_grid_per_client(val_series, client)
+    })
+  
+  l[["prysm"]] | l[["lighthouse"]] | l[["nimbus"]] | l[["teku"]]
+}
+```
+
+### Lighthouse
+
+```{r, layout="l-screen", fig.height=2}
+get_grid_per_client(val_series[
+  validators[, .(validator_index, client)], on="validator_index"
+], "lighthouse")
+```
+
+### Nimbus
+
+```{r, layout="l-screen", fig.height=2}
+get_grid_per_client(val_series[
+  validators[, .(validator_index, client)], on="validator_index"
+], "nimbus")
+```
+
+### Prysm
+
+```{r, layout="l-screen", fig.height=2}
+get_grid_per_client(val_series[
+  validators[, .(validator_index, client)], on="validator_index"
+], "prysm")
+```
+
+### Teku
+
+```{r, layout="l-screen", fig.height=2}
+get_grid_per_client(val_series[
+  validators[, .(validator_index, client)], on="validator_index"
+], "teku")
+```
+
+## Reward rates since genesis
+
+```{r}
+get_reward_timelines <- function(start_epoch, end_epoch, step=25) {
+  start_balances <- get_balances_active_validators(start_epoch)[
+    validators[, .(validator_index, client)], on="validator_index"
+  ][!is.na(balance)] %>%
+    mutate(
+      measurement_epoch = start_epoch
+    ) %>%
+    select(-time_active, -activation_epoch)
+  
+  seq(start_epoch+step, end_epoch+1, step) %>%
+    map(function(epoch) {
+      end_balances <- get_balances_active_validators(epoch)[
+        validators[, .(validator_index, client)], on="validator_index"
+      ][!is.na(balance)] %>%
+        mutate(
+          measurement_epoch = epoch
+        ) %>%
+        select(-time_active, -activation_epoch)
+      
+      t <- start_balances %>%
+        inner_join(end_balances,
+                   by = c("validator_index", "client")) %>%
+        mutate(reward_rate = (balance.y - balance.x) / balance.x * 100 * epochs_per_year / (measurement_epoch.y - measurement_epoch.x))
+      rr <- t %>%
+        group_by(client, measurement_epoch.y) %>%
+        summarise(avg_rr = mean(reward_rate), n_group = n())
+      
+      start_balances <<- end_balances
+      return(rr)
+    }) %>%
+    bind_rows()
+}
+```
+
+```{r cache=TRUE, message=FALSE}
+reward_step <- 20
+rr_series <- get_reward_timelines(1, end_epoch + 1, step=reward_step)
+```
+
+We first look at the reward rates per client since genesis.
+
+```{r}
+rr_series %>%
+  group_by(client, measurement_epoch.y) %>%
+  summarise(avg_rr = sum(avg_rr * n_group) / sum(n_group)) %>%
+  ggplot(aes(x = measurement_epoch.y - reward_step / 2, y = avg_rr, group=client, color=client)) +
+  geom_line() +
+  scale_color_manual(name = "Client", values = client_colours) +
+  xlab("Epoch") +
+  ylab("Average reward rate") +
+  xlim(0, end_epoch) +
+  ggtitle("Timeline of average rates of reward per client")
+```
+
+## Inclusion delay per client
+
+We check the inclusion delay over all validators per client.
+
+```{r}
+val_series[!is.na(inclusion_delay)][
+  validators, on=c("validator_index"), nomatch=NULL
+][
+  , .(avg_inclusion_delay = sum(inclusion_delay * included_ats) / sum(included_ats)),
+  by=.(epoch, client)
+] %>%
+  ggplot() +
+  geom_line(aes(x = epoch, y = avg_inclusion_delay, color = client)) +
+  scale_color_manual(name = "Client", values = client_colours) +
+  xlab("Epoch") +
+  ylab("Average inclusion delay") +
+  ylim(1.0, 1.3) +
+  ggtitle("Timeline of average inclusion delay per client")
+```
+
+We can also check the inclusion delay _by block_, where instead of looking at first inclusion of the attestation minus the attestation slot, we compute the first inclusion of the attestation minus _the earliest block in which this attestation could have been included_. Note that the minimum value of the inclusion delay by block is 0.
+
+```{r}
+val_series[!is.na(inclusion_delay_by_block)][
+  validators, on=c("validator_index"), nomatch=NULL
+][
+  , .(avg_inclusion_delay = sum(inclusion_delay_by_block * included_ats) / sum(included_ats)),
+  by=.(epoch, client)
+] %>%
+  ggplot() +
+  geom_line(aes(x = epoch, y = avg_inclusion_delay, color = client)) +
+  scale_color_manual(name = "Client", values = client_colours) +
+  xlab("Epoch") +
+  ylab("Average inclusion delay by block") +
+  ylim(0.0, 0.2) +
+  ggtitle("Timeline of average inclusion delay by block per client")
+```
+
+## Block-packing
+
+A block can include at most 128 aggregate attestations. How many aggregate attestations did each client include on average?
+
+```{r}
+chunk_size <- 25
+all_ats %>%
+  .[, .(included_ats = .N), by=slot] %>%
+  merge(all_bxs[, .(slot, proposer_index)]) %>%
+  merge(validators[, .(validator_index, client)],
+        by.x = c("proposer_index"), by.y = c("validator_index")) %>%
+  mutate(epoch_chunk = slot %/% slots_per_epoch %/% chunk_size) %>%
+  group_by(epoch_chunk, client) %>%
+  summarise(included_ats = mean(included_ats)) %>%
+  ggplot(aes(x = epoch_chunk * chunk_size, y = included_ats, group=client, color=client)) +
+  geom_line() +
+  scale_color_manual(name = "Client", values = client_colours) +
+  ylim(0, 128) +
+  ggtitle("Average number of aggregates included per block") +
+  xlab("Declared client") +
+  ylab("Average number of aggregates")
+```
+
+Smaller blocks lead to healthier network, as long as they do not leave attestations aside. We check how each client manages redundancy in the next sections.
+
+### Redundant aggregates
+
+Redundant aggregates are made up of attestations that were all already published, albeit possibly across different aggregates.
+
+```{r}
+chunk_size <- 25
+all_bxs %>%
+  merge(validators[, .(validator_index, client)],
+        by.x = c("proposer_index"), by.y = c("validator_index")) %>%
+  merge(redundant_ats, by.x = c("slot"), by.y = c("slot"), all.x = TRUE) %>%
+  setnafill("const", fill = 0, cols = c("n_redundant")) %>%
+  mutate(epoch_chunk = slot %/% slots_per_epoch %/% chunk_size) %>%
+  group_by(epoch_chunk, client) %>%
+  summarise(n_redundant = mean(n_redundant)) %>%
+  ggplot(aes(x = epoch_chunk * chunk_size, y = n_redundant, group=client, color=client)) +
+  geom_line() +
+  scale_color_manual(name = "Client", values = client_colours) +
+  ggtitle("Average number of redundant aggregates per block") +
+  xlab("Epoch") +
+  ylab("Average myopic aggregates")
+```
+
+### Myopic redundant aggregates
+
+Myopic redundant aggregates were already published, with the same attesting indices, in a previous block.
+
+```{r}
+chunk_size <- 25
+all_bxs %>%
+  merge(validators[, .(validator_index, client)],
+        by.x = c("proposer_index"), by.y = c("validator_index")) %>%
+  merge(all_myopic_redundant_ats, by.x = c("slot"), by.y = c("slot"), all.x = TRUE) %>%
+  setnafill("const", fill = 0, cols = c("n_myopic_redundant")) %>%
+  mutate(epoch_chunk = slot %/% slots_per_epoch %/% chunk_size) %>%
+  group_by(epoch_chunk, client) %>%
+  summarise(n_myopic_redundant = mean(n_myopic_redundant)) %>%
+  ggplot(aes(x = epoch_chunk * chunk_size, y = n_myopic_redundant, group=client, color=client)) +
+  geom_line() +
+  scale_color_manual(name = "Client", values = client_colours) +
+  ggtitle("Average number of myopic redundant aggregates per block") +
+  xlab("Epoch") +
+  ylab("Average myopic aggregates")
+```
+
+### Subset aggregates
+
+```{r}
+subset_until_slot <- 20000
+```
+
+Subset aggregates are aggregates included in a block which are fully covered by another aggregate included in the same block. Namely, when aggregate 1 has attesting indices $I$ and aggregate 2 has attesting indices $J$, aggregate 1 is a subset aggregate when $I \subset J$.
+
+<aside>
+This analysis is carried until epoch `r subset_until_slot %/% 32` (`r get_date_from_epoch(subset_until_slot %/% 32)` UTC).
+</aside>
+
+```{r}
+chunk_size <- 20
+all_bxs[slot <= subset_until_slot] %>%
+  merge(validators[, .(validator_index, client)],
+        by.x = c("proposer_index"), by.y = c("validator_index")) %>%
+  merge(subset_ats, by.x = c("slot"), by.y = c("slot"), all.x = TRUE) %>%
+  setnafill("const", fill = 0, cols = c("n_subset", "n_subset_ind", "n_weakly_clashing", "n_strongly_clashing")) %>%
+  mutate(epoch_chunk = slot %/% slots_per_epoch %/% chunk_size) %>%
+  group_by(epoch_chunk, client) %>%
+  summarise(n_subset = mean(n_subset)) %>%
+  ggplot(aes(x = epoch_chunk * chunk_size, y = n_subset, group=client, color=client)) +
+  geom_line() +
+  scale_color_manual(name = "Client", values = client_colours) +
+  ggtitle("Average number of subset aggregates per block") +
+  xlab("Epoch") +
+  ylab("Average subset aggregates")
+```
+
+Lighthouse and Nimbus both score a perfect 0.
+
+```{r}
+chunk_size <- 20
+all_ats[slot <= subset_until_slot] %>%
+  .[, .(included_ats = .N), by=slot] %>%
+  merge(all_bxs[, .(slot, proposer_index)]) %>%
+  merge(validators[, .(validator_index, client)],
+        by.x = c("proposer_index"), by.y = c("validator_index")) %>%
+  merge(subset_ats, by.x = c("slot"), by.y = c("slot"), all.x = TRUE) %>%
+  setnafill("const", fill = 0, cols = c("n_subset", "n_subset_ind", "n_weakly_clashing", "n_strongly_clashing")) %>%
+  mutate(epoch_chunk = slot %/% slots_per_epoch %/% chunk_size) %>%
+  group_by(epoch_chunk, client) %>%
+  summarise(n_subset = mean(n_subset)) %>%
+  ggplot(aes(x = epoch_chunk * chunk_size, y = n_subset, group=client, color=client)) +
+  geom_line() +
+  scale_color_manual(name = "Client", values = client_colours) +
+  ggtitle("Percentage of subset aggregates among included aggregates") +
+  xlab("Epoch") +
+  ylab("Percentage of subset aggregates in block")
+```
