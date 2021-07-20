@@ -26,31 +26,22 @@ Data analysis and bias confirmations for the execution layer.
 
 Consensus layer and validator analytics.
 
-- [Code library](eth2data/notebooks/lib.R)
+- [Code library](posdata/notebooks/lib.R)
 
 ### Beacon chain April 2021 incident
 
-- [Blog post](https://barnabe.substack.com/p/a-data-driven-view-of-the-beacon) + [Script](eth2data/script/20210424_plots.R)
+- [Blog post](https://barnabe.substack.com/p/a-data-driven-view-of-the-beacon) + [Script](posdata/script/20210424_plots.R)
 
 ### Mainnet data analysis
 
 - [Exploring Mainnet](https://ethereum.github.io/rig/eth2data/notebooks/mainnet_explore.html)
-- [Mainnet client comparison](https://ethereum.github.io/rig/eth2data/notebooks/mainnet_compare.html)
-
-### Pyrmont data analysis
-
-- [Exploring Pyrmont](https://ethereum.github.io/rig/eth2data/notebooks/pyrmont_explore.html)
-- [Pyrmont client comparison](https://ethereum.github.io/rig/eth2data/notebooks/pyrmont_compare.html)
-
-### Medalla data analysis
-
-- [Exploring Medalla](https://ethereum.github.io/rig/eth2data/notebooks/medalla_explore.html)
 
 ## Beacon Digest
 
-Explorations of the beacon chain.
+Explorations of the beacon chain by [Shyam Sridhar](https://twitter.com/ShyamSridhar7).
 
-**==> [Beacon digest repo](https://github.com/SHSR2001/beacondigest) <==**
+- [Beacon Digest website](https://shsr2001.github.io/beacondigest)
+- [Beacon digest repo](https://github.com/SHSR2001/beacondigest)
 
 ## Talks
 
