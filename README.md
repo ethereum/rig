@@ -49,6 +49,8 @@ Meet the RIG and check our previous talks!
 
 | Talk | Location | Date | Link |
 |---|---|---|---|
+| Employing a reinforcement learning-based framework to analyze incentive mechanism attacks on Ethereum blockchain | EDCON 2021 | 28 August 2021 | [Video](https://youtu.be/mwxK7tEtcIM) |
+| Post-London EIP-1559 Assessment | EIP-1559 breakout call #12 | 13 August 2021 | [Video](https://youtu.be/ZmzIHFuwdg0?t=239) |
 | Protocol cryptoeconomics with the RIG | EthCC[4] | 20 July 2021 | [Video](https://www.youtube.com/watch?v=6FIIZW7ScuE) + [Slides](assets/pdf/ethcc2021.pdf) |
 | Ethereum : Un protocole en mutation | EthCC[4] | 20 July 2021 | |
 | PEEPanEIP #37: EIP-1559: Fee market change with Tim Beiko, Barnabé Monnot, Micah Zoltu | Ethereum Cat Herders | 21 June 2021 | [Video](https://www.youtube.com/watch?v=AC1FS3LmoT4) + [Slides](https://docs.google.com/presentation/d/1vVGaezpoj-sYPPBNSY0LdPyJGIex2zl1cdgipVoMkL0/edit?usp=sharing) |

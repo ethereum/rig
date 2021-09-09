@@ -15,6 +15,7 @@ slots_per_epoch <- 32
 medalla_genesis <- 1596546008
 pyrmont_genesis <- 1605700800
 mainnet_genesis <- 1606824023
+default_url <- "http://10.10.42.119:5052"
 
 get_date_from_epoch <- function(epoch, testnet="mainnet") {
   if (testnet == "mainnet") {
@@ -144,7 +145,7 @@ test_ops_ats <- function(fn, dataset = "individual") {
     fn()
 }
 
-get_committees <- function(epoch, url="http://192.168.1.172:5052") {
+get_committees <- function(epoch, url=default_url) {
   print(str_c("Getting committee of epoch ", epoch, "\n"))
   content(GET(str_c(url, "/eth/v1/beacon/states/",
             epoch * slots_per_epoch, "/committees"), accept_json()))$data %>%
@@ -155,7 +156,7 @@ get_committees <- function(epoch, url="http://192.168.1.172:5052") {
          index_in_committee = rowid(slot, index) - 1)]
 }
 
-get_validators <- function(epoch, url="http://192.168.1.172:5052") {
+get_validators <- function(epoch, url=default_url) {
   t <- (content(GET(str_c(url, "/eth/v1/beacon/states/",
                     epoch * slots_per_epoch, "/validators")), as="text") %>%
     fromJSON())$data
@@ -233,14 +234,15 @@ find_client <- function(graffiti) {
   )
 }
 
-get_block_at_slot <- function(slot, url="http://192.168.1.172:5052") {
+get_block_at_slot <- function(slot, url=default_url) {
   get_block_and_attestations_at_slot(url)$block
 }
 
-get_block_and_attestations_at_slot <- function(slot, url="http://192.168.1.172:5052") {
+get_block_and_attestations_at_slot <- function(slot, url=default_url) {
   # print(str_c("Blocks and attestations of slot ", slot, "\n"))
   block <- content(GET(str_c(url, "/eth/v1/beacon/blocks/", slot), accept_json()))$data$message
-  if (as.numeric(block$slot) != slot) {
+
+  if (is.null(block) || as.numeric(block$slot) != slot) {
     return(NULL)
   }
   
@@ -285,7 +287,7 @@ get_block_and_attestations_at_slot <- function(slot, url="http://192.168.1.172:5
   )
 }
 
-get_blocks_and_attestations <- function(epoch, url="http://192.168.1.172:5052") {
+get_blocks_and_attestations <- function(epoch, url=default_url) {
   print(str_c("Blocks and attestations of epoch ", epoch, "\n"))
   start_slot <- epoch * slots_per_epoch
   end_slot <- (epoch + 1) * slots_per_epoch - 1
@@ -341,7 +343,7 @@ get_correctness_data <- function(t, block_root_at_slot) {
 }
 
 get_stats_per_val <- function(all_ats, block_root_at_slot, first_possible_inclusion_slot,
-                              committees = NULL, validators = NULL, chunk_size = 10, url="http://192.168.1.172:5052") {
+                              committees = NULL, validators = NULL, chunk_size = 10, url=default_url) {
   min_epoch <- min(all_ats$att_slot) %/% 32
   max_epoch <- max(all_ats$att_slot) %/% 32
   print(str_c("Min epoch ", min_epoch, ", max epoch ", max_epoch))
@@ -470,31 +472,6 @@ get_myopic_redundant_ats_detail <- function(all_ats) {
   ]
 }
 
-# test_myopic_redundant_ats <- tibble(
-#   att_slot = c(1, 1),
-#   committee_index = c(1, 1),
-#   slot = c(2, 3),
-#   beacon_block_root = c("a", "a"),
-#   source_block_root = c("a", "a"),
-#   target_block_root = c("a", "a"),
-#   attesting_indices = c("101", "101")
-# ) %>%
-#   as.data.table()
-# get_myopic_redundant_ats_detail(test_myopic_redundant_ats) %>% glimpse()
-
-# test_not_myopic_redundant_ats <- tibble(
-#   att_slot = c(1, 1),
-#   committee_index = c(1, 1),
-#   slot = c(2, 3),
-#   beacon_block_root = c("a", "a"),
-#   source_block_root = c("a", "a"),
-#   target_block_root = c("a", "a"),
-#   attesting_indices = c("101", "100")
-# ) %>%
-#   as.data.table()
-# get_myopic_redundant_ats_detail(test_not_myopic_redundant_ats) %>% glimpse()
-
-
 get_redundant_ats <- function(all_ats) {
   t <- copy(all_ats)
   t[, ats_index:=.I]
@@ -512,30 +489,6 @@ get_redundant_ats <- function(all_ats) {
     slot > max_inclusion_slot, .(n_redundant = .N), by = slot
   ]
 }
-
-# test_redundant_ats <- tibble(
-#   att_slot = c(1, 1, 1),
-#   committee_index = c(1, 1, 1),
-#   slot = c(2, 2, 3),
-#   beacon_block_root = c("a", "a", "a"),
-#   source_block_root = c("a", "a", "a"),
-#   target_block_root = c("a", "a", "a"),
-#   attesting_indices = c("100", "001", "101")
-# ) %>%
-#   as.data.table()
-# get_redundant_ats(test_redundant_ats)
-# 
-# test_not_redundant_ats <- tibble(
-#     att_slot = c(1, 1, 1),
-#     committee_index = c(1, 1, 1),
-#     slot = c(2, 2, 3),
-#     beacon_block_root = c("a", "a", "a"),
-#     source_block_root = c("a", "a", "a"),
-#     target_block_root = c("a", "a", "a"),
-#     attesting_indices = c("100", "001", "111")
-#   ) %>%
-#     as.data.table()
-# get_redundant_ats(test_not_redundant_ats)
 
 get_strong_redundant_ats <- function(all_ats) {
   all_ats %>%
@@ -693,39 +646,3 @@ get_aggregate_info <- function(all_ats) {
            source_block_root, target_block_root,
            n_subset, n_subset_ind, n_strongly_clashing, n_weakly_clashing)
 }
-
-# test_weak_clashing_ats <- tibble(
-#   att_slot = c(1, 1),
-#   committee_index = c(1, 1),
-#   slot = c(2, 2),
-#   beacon_block_root = c("a", "a"),
-#   source_block_root = c("a", "a"),
-#   target_block_root = c("a", "a"),
-#   attesting_indices = c("100", "001")
-# ) %>%
-#   as.data.table()
-# get_aggregate_info(test_weak_clashing_ats) %>% glimpse()
-# 
-# test_strong_clashing_ats <- tibble(
-#   att_slot = c(1, 1),
-#   committee_index = c(1, 1),
-#   slot = c(2, 2),
-#   beacon_block_root = c("a", "a"),
-#   source_block_root = c("a", "a"),
-#   target_block_root = c("a", "a"),
-#   attesting_indices = c("110", "011")
-# ) %>%
-#   as.data.table()
-# get_aggregate_info(test_strong_clashing_ats) %>% glimpse()
-# 
-# test_subset_clashing_ats <- tibble(
-#   att_slot = c(1, 1),
-#   committee_index = c(1, 1),
-#   slot = c(2, 2),
-#   beacon_block_root = c("a", "a"),
-#   source_block_root = c("a", "a"),
-#   target_block_root = c("a", "a"),
-#   attesting_indices = c("101", "001")
-# ) %>%
-#   as.data.table()
-# get_aggregate_info(test_subset_clashing_ats) %>% glimpse()
