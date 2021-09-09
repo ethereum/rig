@@ -44,7 +44,7 @@ Explorations of the beacon chain by [Shyam Sridhar](https://twitter.com/ShyamSri
 - [Beacon digest repo](https://github.com/SHSR2001/beacondigest)
 
 ## Talks
-
+80x160
 Meet the RIG and check our previous talks!
 
 | Talk | Location | Date | Link |
