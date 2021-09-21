@@ -15,7 +15,6 @@ slots_per_epoch <- 32
 medalla_genesis <- 1596546008
 pyrmont_genesis <- 1605700800
 mainnet_genesis <- 1606824023
-default_url <- "http://10.10.42.119:5052"
 
 get_date_from_epoch <- function(epoch, testnet="mainnet") {
   if (testnet == "mainnet") {
@@ -234,11 +233,11 @@ find_client <- function(graffiti) {
   )
 }
 
-get_block_at_slot <- function(slot, url=default_url) {
-  get_block_and_attestations_at_slot(url)$block
+get_block_at_slot <- function(slot, url=default_url, sync_committee = FALSE) {
+  get_block_and_attestations_at_slot(slot, url, sync_committee)$block
 }
 
-get_block_and_attestations_at_slot <- function(slot, url=default_url) {
+get_block_and_attestations_at_slot <- function(slot, url=default_url, sync_committee = FALSE) {
   # print(str_c("Blocks and attestations of slot ", slot, "\n"))
   block <- content(GET(str_c(url, "/eth/v1/beacon/blocks/", slot), accept_json()))$data$message
 
@@ -271,7 +270,7 @@ get_block_and_attestations_at_slot <- function(slot, url=default_url) {
   
   block_root <- content(GET(str_c(url, "/eth/v1/beacon/blocks/", slot, "/root")))$data$root
   
-  block <- tibble(
+  block_ret <- tibble(
     block_root = str_trunc(block_root, 12, "left", ellipsis = ""),
     parent_root = str_trunc(block$parent_root, 12, "left", ellipsis = ""),
     state_root = str_trunc(block$state_root, 12, "left", ellipsis = ""),
@@ -279,31 +278,53 @@ get_block_and_attestations_at_slot <- function(slot, url=default_url) {
     proposer_index = as.numeric(block$proposer_index),
     graffiti = tolower(hex2string(block$body$graffiti)),
   )
-  setDT(block)
+  if (sync_committee) {
+    block_ret$sync_committee <- decode_aggregation_bits(block$body$sync_aggregate$sync_committee_bits)
+  }
+  setDT(block_ret)
   
   list(
-    block = block,
+    block = block_ret,
     attestations = attestations
   )
 }
 
-get_blocks_and_attestations <- function(epoch, url=default_url) {
+get_sync_committee <- function(epoch, url=default_url) {
+  scs <- content(GET(str_c(url, "/eth/v1/beacon/states/",
+                    epoch * 32, "/sync_committees"), accept_json()))$data
+  tibble(
+    epoch = epoch,
+    validator_index = scs$validators %>% unlist() %>% as.integer()
+  ) %>%
+    mutate(index_in_sync_committee = row_number() - 1) %>%
+    return()
+}
+
+get_exploded_sync_block <- function(t) {
+  t[, bxs_index := .I]
+  t <- t[, .(sync_committeed = as.numeric(unlist(strsplit(sync_committee, "")))),
+         by=setdiff(names(t), "sync_committee")]
+  t[, index_in_sync_committee := rowid(bxs_index) - 1]
+  return(t[, -c("bxs_index")])
+}
+
+get_blocks_and_attestations <- function(epoch, url=default_url, sync_committee=FALSE) {
   print(str_c("Blocks and attestations of epoch ", epoch, "\n"))
   start_slot <- epoch * slots_per_epoch
   end_slot <- (epoch + 1) * slots_per_epoch - 1
   start_slot:end_slot %>%
-    map(function(epoch) { get_block_and_attestations_at_slot(epoch, url) }) %>%
+    map(function(epoch) { get_block_and_attestations_at_slot(epoch, url, sync_committee) }) %>%
     keep(is.list) %>%
     purrr::transpose() %>%
     map(rbindlist)
 }
 
-get_blocks <- function(epoch) {
+get_blocks <- function(epoch, sync_committee = FALSE) {
   print(str_c("Getting blocks of epoch ", epoch))
   start_slot <- epoch * slots_per_epoch
   end_slot <- (epoch + 1) * slots_per_epoch - 1
   start_slot:end_slot %>%
-    map(get_block_at_slot) %>%
+    map(function(slot) { get_block_at_slot(slot, sync_committee=sync_committee) }) %>%
     rbindlist()
 }
 
@@ -389,13 +410,15 @@ get_stats_per_slot <- function(all_ats, committees, chunk_size = 100) {
   min_epoch <- min(all_ats$att_slot) %/% 32
   max_epoch <- max(all_ats$att_slot) %/% 32
   print(str_c("Min epoch ", min_epoch, ", max epoch ", max_epoch))
-  seq(min_epoch, max_epoch, chunk_size) %>%
+  seq(min_epoch, max_epoch-1, chunk_size) %>%
     map(function(epoch) {
       print(str_c("Epoch ", epoch))
       t <- copy(all_ats[(att_slot >= epoch * slots_per_epoch) & (att_slot < ((epoch + chunk_size) * slots_per_epoch))])
       t <- get_exploded_ats(t)
-      t[, .(att_slot, committee_index, index_in_committee, correct_target, correct_head)] %>%
+      t[, .SD[which.min(slot)], by = .(att_slot, committee_index, index_in_committee)] %>%
+        .[, .(att_slot, committee_index, index_in_committee, correct_target, correct_head)] %>%
         unique() %>%
+        inner_join(committees) %>%
         .[, .(included_ats = .N,
               correct_targets = sum(correct_target),
               correct_heads = sum(correct_head)), by=att_slot] %>%
@@ -638,11 +661,14 @@ get_aggregate_info <- function(all_ats) {
     nest() %>%
     mutate(includes = map(data, compare_ats),
            n_subset = map(includes, count_subset) %>% unlist(),
-           n_subset_ind = map(includes, count_subset_ind) %>% unlist(),
-           n_strongly_clashing = map(includes, count_strongly_clashing) %>% unlist(),
-           n_weakly_clashing = map(includes, count_weakly_clashing) %>% unlist()) %>%
+           n_subset_ind = map(includes, count_subset_ind) %>% unlist()
+           # n_strongly_clashing = map(includes, count_strongly_clashing) %>% unlist(),
+           # n_weakly_clashing = map(includes, count_weakly_clashing) %>% unlist()
+           ) %>%
     filter(n_subset > 0 | n_strongly_clashing > 0 | n_weakly_clashing > 0) %>%
     select(slot, att_slot, committee_index, beacon_block_root,
            source_block_root, target_block_root,
-           n_subset, n_subset_ind, n_strongly_clashing, n_weakly_clashing)
+           n_subset, n_subset_ind
+           # n_strongly_clashing, n_weakly_clashing
+           )
 }
