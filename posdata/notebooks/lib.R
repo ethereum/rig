@@ -16,6 +16,9 @@ medalla_genesis <- 1596546008
 pyrmont_genesis <- 1605700800
 mainnet_genesis <- 1606824023
 
+# Source default_url
+source(here::here("scripts/default_url.R"))
+
 get_date_from_epoch <- function(epoch, testnet="mainnet") {
   if (testnet == "mainnet") {
     genesis <- mainnet_genesis
@@ -240,6 +243,7 @@ get_block_at_slot <- function(slot, url=default_url, sync_committee = FALSE) {
 get_block_and_attestations_at_slot <- function(slot, url=default_url, sync_committee = FALSE) {
   # print(str_c("Blocks and attestations of slot ", slot, "\n"))
   block <- content(GET(str_c(url, "/eth/v1/beacon/blocks/", slot), accept_json()))$data$message
+  block <- content(GET(str_c(url, "/eth/v1/beacon/blocks/", 2100000), accept_json()))$data$message
 
   if (is.null(block) || as.numeric(block$slot) != slot) {
     return(NULL)

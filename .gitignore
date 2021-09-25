@@ -8,3 +8,4 @@ visuals/
 temp
 .Rproj.user
 cadCAD/
+ethdata/scripts/default_url.R
