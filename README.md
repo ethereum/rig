@@ -57,7 +57,7 @@ Meet the RIG and check our previous talks!
 | Talk | Location | Date | Link |
 |---|---|---|---|
 | Economics of EIP-1559 | Berlin Ethereum Meetup | 4 November 2021 | [Slides](https://docs.google.com/presentation/d/1DG95jsDsjwoK4mNnSxQHbXaupeIkcSj4bX-55DxPMwE/edit?usp=sharing) |
-| The Game of Reorgs in PoS Ethereum | [LisCon](https://liscon.org/) | 20 October 2021 | [Video](https://vimeo.com/637529564) + [Slides](https://drive.google.com/file/d/1nNOx3p8ZSIbY6M9UDntbGZbFEJ0fOKE-/view?usp=sharing) |
+| The Game of Reorgs in PoS Ethereum | LisCon 2021 | 20 October 2021 | [Video](https://vimeo.com/637529564) + [Slides](https://drive.google.com/file/d/1nNOx3p8ZSIbY6M9UDntbGZbFEJ0fOKE-/view?usp=sharing) |
 | Employing a reinforcement learning-based framework to analyze incentive mechanism attacks on Ethereum blockchain | EDCON 2021 | 28 August 2021 | [Video](https://youtu.be/mwxK7tEtcIM) |
 | Post-London EIP-1559 Assessment | EIP-1559 breakout call #12 | 13 August 2021 | [Video](https://youtu.be/ZmzIHFuwdg0?t=239) |
 | Protocol cryptoeconomics with the RIG | EthCC[4] | 20 July 2021 | [Video](https://www.youtube.com/watch?v=6FIIZW7ScuE) + [Slides](assets/pdf/ethcc2021.pdf) |
