@@ -49,6 +49,7 @@ Simulations and analysis of transaction fee markets, specifically EIP-1559.
 - Reijsbergen, D., Sridhar, S., Monnot, B., Leonardos, S., Skoulakis, S., & Piliouras, G. (2021). Transaction Fees on a Honeymoon: Ethereum's EIP-1559 One Month Later. _arXiv preprint arXiv:2110.04753_. [arXiv link](https://arxiv.org/abs/2110.04753)
 
 - Leonardos, S., Monnot, B., Reijsbergen, D., Skoulakis, S., & Piliouras, G. (2021). Dynamical Analysis of the EIP-1559 Ethereum Fee Market. _arXiv preprint arXiv:2102.10567_. [arXiv link](https://arxiv.org/abs/2102.10567)
+
 ## Talks
 
 Meet the RIG and check our previous talks!
