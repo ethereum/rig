@@ -17,8 +17,8 @@ Ongoing effort to produce an incentives-focused testing environment for the cons
 
 Consensus layer and validator analytics.
 
-- [Beacon chain data analysis library (in R)](posdata/notebooks/lib.R)
-- [Beacon chain April 2021 incident](https://barnabe.substack.com/p/a-data-driven-view-of-the-beacon) + [Script (in R)](posdata/script/20210424_plots.R)
+- [Beacon chain data analysis library (in R)](https://github.com/ethereum/rig/blob/master/posdata/notebooks/lib.R)
+- [Beacon chain April 2021 incident](https://barnabe.substack.com/p/a-data-driven-view-of-the-beacon) + [Script (in R)](https://github.com/ethereum/rig/blob/master/posdata/script/20210424_plots.R)
 - [Exploring the first 1000 epochs](https://ethereum.github.io/rig/posdata/notebooks/mainnet_explore.html)
 
 ### Fee markets
@@ -33,8 +33,8 @@ Simulations and analysis of transaction fee markets, specifically EIP-1559.
 #### Data analysis
 
 - A dashboard for EIP-1559 ([Dune](https://dune.xyz/barnabe/EIP1559))
-- [Gas weather report, July 21st-July 27th](https://ethereum.github.io/rig/ethdata/notebooks/gas_weather_reports/exploreJuly21.html) + [source](ethdata/notebooks/gas_weather_reports/exploreJuly21.Rmd)
-- [Exploring blocks, gas and transactions](https://ethereum.github.io/rig/ethdata/notebooks/explore_data.html) + [source](ethdata/notebooks/explore_data.Rmd)
+- [Gas weather report, July 21st-July 27th](https://ethereum.github.io/rig/ethdata/notebooks/gas_weather_reports/exploreJuly21.html) + [source](https://github.com/ethereum/rig/blob/master/ethdata/notebooks/gas_weather_reports/exploreJuly21.Rmd)
+- [Exploring blocks, gas and transactions](https://ethereum.github.io/rig/ethdata/notebooks/explore_data.html) + [source](https://github.com/ethereum/rig/blob/master/ethdata/notebooks/explore_data.Rmd)
 
 #### Other publications
 
