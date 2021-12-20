@@ -56,6 +56,7 @@ Meet the RIG and check our previous talks!
 
 | Talk | Speaker | Location | Date | Link |
 |---|---|---|---|---|
+| Protocol Cryptoeconomics | Barnabé | NTU Blockchain workshop | 20 December 2021 | [Slides](https://docs.google.com/presentation/d/1IamBsYVa40qLrGu6QIhpumMb81AgRawe_ZblHrig9xY/edit?usp=sharing) |
 | Economics of EIP-1559 | Barnabé | Berlin Ethereum Meetup | 4 November 2021 | [Slides](https://docs.google.com/presentation/d/1DG95jsDsjwoK4mNnSxQHbXaupeIkcSj4bX-55DxPMwE/edit?usp=sharing) |
 | The Game of Reorgs in PoS Ethereum | Caspar | LisCon 2021 | 20 October 2021 | [Video](https://vimeo.com/637529564) + [Slides](https://drive.google.com/file/d/1nNOx3p8ZSIbY6M9UDntbGZbFEJ0fOKE-/view?usp=sharing) |
 | Employing a reinforcement learning-based framework to analyze incentive mechanism attacks on Ethereum blockchain | Shyam | EDCON 2021 | 28 August 2021 | [Video](https://youtu.be/mwxK7tEtcIM) |
