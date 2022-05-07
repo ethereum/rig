@@ -1,4 +1,4 @@
-Find our projects and releases in this repo!
+The Robust Incentives Group is a research team of the Ethereum Foundation. We specialise in incentive analysis for protocols, using methods from game theory, mechanism design, empirical analysis and simulations. Since our foundation, we actively participated in research on EIP-1559 and Proof-of-Stake Ethereum. Find our releases, posts, and papers on this homepage!
 
 ## Projects
 
@@ -42,6 +42,12 @@ Simulations and analysis of transaction fee markets, specifically EIP-1559.
 - [Understanding fees in EIP-1559](https://barnabe.substack.com/p/understanding-fees-in-eip1559)
 - [Better bidding with EIP-1559](https://barnabe.substack.com/p/better-bidding-with-eip1559)
 
+### Rollups
+
+#### Other publications
+
+- [Understanding rollup economics from first principles](https://barnabe.substack.com/p/understanding-rollup-economics-from?utm_source=url) + [Dashboard](https://dune.com/barnabe/Rollup-statistics)
+
 ## Publications
 
 - Schwarz-Schilling, C., Neu, J., Monnot, B., Asgaonkar, A., Tas, E. N., & Tse, D. (2021). Three Attacks on Proof-of-Stake Ethereum. _arXiv preprint arXiv:2110.10086_. [arXiv link](https://arxiv.org/abs/2110.10086)
@@ -56,6 +62,12 @@ Meet the RIG and check our previous talks!
 
 | Talk | Speaker | Location | Date | Link |
 |---|---|---|---|---|
+| Let me in! Let me IIINNNN! A longitudinal study of the transaction supply chain from CryptoKitties to MEV-Boost to PBS | Barnabé | [mev.day](https://flashbots.notion.site/MEV-DAY-836f88806995412dabc1c7bb7ce4e830) @ Devconnect | 22 April 2022 | [Video](https://www.youtube.com/watch?t=9784&v=HYPGD2bOMOo) + [Slides](https://docs.google.com/presentation/d/1lkt_33zWTz9ZNU661ORJwYLO6wqijuPR6xZ9VUhGfLU/edit?usp=sharing) |
+| Notes on Ethereum’s circulating supply equilibrium and the prospect of perpetual deflation via minimum viable issuance under proof of stake | Anders | ETHconomics @ Devconnect | 21 April 2022 | Video (TBA) + Slides (TBA) |
+| ETHconomics | RIG team | ETHconomics @ Devconnect | 21 April 2022 | Videos (TBA) + [Schedule](https://ef-events.notion.site/ETHconomics-Devconnect-676d73f791684e18bfae35bbc9e1fa90) |
+| Proposer-Builder Separation (PBS) | Barnabé | Protocol R&D Workshop @ Devconnect | 19 April 2022 | [Slides](https://docs.google.com/presentation/d/10-rDd99he_7_lHq0wqIRlPb29z5Lx9ZpUl1PKQq8JRU/edit?usp=sharing) |
+| Robust incentives testing at the Robust Incentives Group | Barnabé | [Workshop on Incentive Mechanism Validation (WIMV)](https://sites.google.com/semiotic.ai/wimv2022) @ Devconnect | 18 April 2022 | [Video](https://youtu.be/bX2NAvQjaag) + [Slides](https://docs.google.com/presentation/d/1mWCuVQGrG5KS6GwG09D4q7MzHfeCIi54xdygJp8F3IM/edit?usp=sharing) |
+| The road to Ethereum (2022 version) | Barnabé | SUTD Guest Lecture | 11 April 2022 | [Slides](https://docs.google.com/presentation/d/1mNi7mjBH4OOPOLw945Vow4q2-tHPVKh9P_wG518fMD0/edit?usp=sharing) |
 | Protocol Cryptoeconomics | Barnabé | NTU Blockchain workshop | 20 December 2021 | [Slides](https://docs.google.com/presentation/d/1IamBsYVa40qLrGu6QIhpumMb81AgRawe_ZblHrig9xY/edit?usp=sharing) |
 | Economics of EIP-1559 | Barnabé | Berlin Ethereum Meetup | 4 November 2021 | [Slides](https://docs.google.com/presentation/d/1DG95jsDsjwoK4mNnSxQHbXaupeIkcSj4bX-55DxPMwE/edit?usp=sharing) |
 | The Game of Reorgs in PoS Ethereum | Caspar | LisCon 2021 | 20 October 2021 | [Video](https://vimeo.com/637529564) + [Slides](https://drive.google.com/file/d/1nNOx3p8ZSIbY6M9UDntbGZbFEJ0fOKE-/view?usp=sharing) |
