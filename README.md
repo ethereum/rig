@@ -62,7 +62,7 @@ Meet the RIG and check our previous talks!
 
 | Talk | Speaker | Location | Date | Link |
 |---|---|---|---|---|
-| Modelling blockchain protocols | Barnabé | SMGT Erice | 14 May 2022 | [Slides](https://docs.google.com/presentation/d/1JkwCeYNCF4fwK7W03TOGFq8thzrwdVIiFHbqzKI91CM/edit?usp=sharing) |
+| Modelling blockchain protocols: Consensus and fee markets | Barnabé | [SMGT Erice](https://sites.google.com/view/erice-smgt2020/the-workshop?authuser=0) | 14 May 2022 | [Slides](https://docs.google.com/presentation/d/1JkwCeYNCF4fwK7W03TOGFq8thzrwdVIiFHbqzKI91CM/edit?usp=sharing) |
 | Let me in! Let me IIINNNN! A longitudinal study of the transaction supply chain from CryptoKitties to MEV-Boost to PBS | Barnabé | [mev.day](https://flashbots.notion.site/MEV-DAY-836f88806995412dabc1c7bb7ce4e830) @ Devconnect | 22 April 2022 | [Video](https://www.youtube.com/watch?t=9784&v=HYPGD2bOMOo) + [Slides](https://docs.google.com/presentation/d/1lkt_33zWTz9ZNU661ORJwYLO6wqijuPR6xZ9VUhGfLU/edit?usp=sharing) |
 | Notes on Ethereum’s circulating supply equilibrium and the prospect of perpetual deflation via minimum viable issuance under proof of stake | Anders | ETHconomics @ Devconnect | 21 April 2022 | Video (TBA) + Slides (TBA) |
 | ETHconomics | RIG team | ETHconomics @ Devconnect | 21 April 2022 | Videos (TBA) + [Schedule](https://ef-events.notion.site/ETHconomics-Devconnect-676d73f791684e18bfae35bbc9e1fa90) |
