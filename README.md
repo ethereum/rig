@@ -20,6 +20,7 @@ Consensus layer and validator analytics.
 - [Beacon chain data analysis library (in R)](https://github.com/ethereum/rig/blob/master/posdata/notebooks/lib.R)
 - [Beacon chain April 2021 incident](https://barnabe.substack.com/p/a-data-driven-view-of-the-beacon) + [Script (in R)](https://github.com/ethereum/rig/blob/master/posdata/script/20210424_plots.R)
 - [Exploring the first 1000 epochs](https://ethereum.github.io/rig/posdata/notebooks/mainnet_explore.html)
+- [Visualising the 7-block reorg on the Ethereum beacon chain](https://barnabe.substack.com/p/pos-ethereum-reorg?s=w)
 
 ### Fee markets
 
@@ -46,6 +47,7 @@ Simulations and analysis of transaction fee markets, specifically EIP-1559.
 
 #### Other publications
 
+- [The road to Ethereum: Visualising a rollup-centric future](https://barnabe.substack.com/p/eth2?s=w)
 - [Understanding rollup economics from first principles](https://barnabe.substack.com/p/understanding-rollup-economics-from?utm_source=url) + [Dashboard](https://dune.com/barnabe/Rollup-statistics)
 
 ## Publications
@@ -62,6 +64,7 @@ Meet the RIG and check our previous talks!
 
 | Talk | Speaker | Location | Date | Link |
 |---|---|---|---|---|
+| Making sense of rollup economics | Barnabé | EthCC[5] | 20 July 2022 | [Slides](https://docs.google.com/presentation/d/1ycfr9f0Ppcxf8LK9--C0ie9co7c0Pb2RaMdl4-vn9iY/edit?usp=sharing) |
 | Modelling blockchain protocols: Consensus and fee markets | Barnabé | [SMGT Erice](https://sites.google.com/view/erice-smgt2020/the-workshop?authuser=0) | 14 May 2022 | [Slides](https://docs.google.com/presentation/d/1JkwCeYNCF4fwK7W03TOGFq8thzrwdVIiFHbqzKI91CM/edit?usp=sharing) |
 | Let me in! Let me IIINNNN! A longitudinal study of the transaction supply chain from CryptoKitties to MEV-Boost to PBS | Barnabé | [mev.day](https://flashbots.notion.site/MEV-DAY-836f88806995412dabc1c7bb7ce4e830) @ Devconnect | 22 April 2022 | [Video](https://www.youtube.com/watch?t=9784&v=HYPGD2bOMOo) + [Slides](https://docs.google.com/presentation/d/1lkt_33zWTz9ZNU661ORJwYLO6wqijuPR6xZ9VUhGfLU/edit?usp=sharing) |
 | Notes on Ethereum’s circulating supply equilibrium and the prospect of perpetual deflation via minimum viable issuance under proof of stake | Anders | ETHconomics @ Devconnect | 21 April 2022 | Video (TBA) + Slides (TBA) |
