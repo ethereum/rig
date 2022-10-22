@@ -1,10 +1,18 @@
 The Robust Incentives Group is a research team of the Ethereum Foundation. We specialise in incentive analysis for protocols, using methods from game theory, mechanism design, empirical analysis and simulations. Since our foundation, we actively participated in research on EIP-1559 and Proof-of-Stake Ethereum. Find our releases, posts, and papers on this homepage!
 
+**We're hiring!** Find our job offer for a protocol economist [here](https://jobs.lever.co/ethereumfoundation/cd2382ec-abbd-493b-b942-b5e2a61a6c0a).
+
+## RIG Open Questions (ROPs)
+
+We propose a set of Open Questions we're looking to collaborate on. Find more details on the [ROPs homepage](https://efdn.notion.site/ROPs-RIG-Open-Problems-c11382c213f949a4b89927ef4e962adf)!
+
 ## Projects
 
 ### Proof-of-Stake
 
 Research on Ethereum Proof-of-Stake consensus
+
+- [Timing games in Proof-of-Stake](https://ethresear.ch/t/timing-games-in-proof-of-stake/13980?u=barnabe)
 
 #### Beacon Runner: Proof-of-Stake digital twin
 
@@ -37,6 +45,11 @@ Simulations and analysis of transaction fee markets, specifically EIP-1559.
 - [Gas weather report, July 21st-July 27th](https://ethereum.github.io/rig/ethdata/notebooks/gas_weather_reports/exploreJuly21.html) + [source](https://github.com/ethereum/rig/blob/master/ethdata/notebooks/gas_weather_reports/exploreJuly21.Rmd)
 - [Exploring blocks, gas and transactions](https://ethereum.github.io/rig/ethdata/notebooks/explore_data.html) + [source](https://github.com/ethereum/rig/blob/master/ethdata/notebooks/explore_data.Rmd)
 
+#### Financial products for blockspace
+
+- [Structuring Blockspace Derivatives](https://mirror.xyz/0x03c29504CEcCa30B93FF5774183a1358D41fbeB1/WKa3GFC03uY34d2MufTyD0c595xVRUEZi9RNG-dHNKs)
+- [Next-Block Base Fee Options: Towards a Practical Implementation](https://mirror.xyz/0x03c29504CEcCa30B93FF5774183a1358D41fbeB1/dKgbn5YA3S5AL_qbUWq4HHZAjQSJGZf8oEPZ5Q89aFc)
+
 #### Other publications
 
 - [Congestion control and EIP-1559](https://barnabe.substack.com/p/congestion-control-and-eip1559)
@@ -45,10 +58,12 @@ Simulations and analysis of transaction fee markets, specifically EIP-1559.
 
 ### Rollups
 
-#### Other publications
-
 - [The road to Ethereum: Visualising a rollup-centric future](https://barnabe.substack.com/p/eth2?s=w)
 - [Understanding rollup economics from first principles](https://barnabe.substack.com/p/understanding-rollup-economics-from?utm_source=url) + [Dashboard](https://dune.com/barnabe/Rollup-statistics)
+
+### Proposer-Builder Separation (PBS)
+
+- [Unbundling PBS: Towards protocol-enforced proposer commitments (PEPC)](https://ethresear.ch/t/unbundling-pbs-towards-protocol-enforced-proposer-commitments-pepc/13879?u=barnabe)
 
 ## Publications
 
@@ -64,11 +79,14 @@ Meet the RIG and check our previous talks!
 
 | Talk | Speaker | Location | Date | Link |
 |---|---|---|---|---|
-| Making sense of rollup economics | Barnabé | EthCC[5] | 20 July 2022 | [Slides](https://docs.google.com/presentation/d/1ycfr9f0Ppcxf8LK9--C0ie9co7c0Pb2RaMdl4-vn9iY/edit?usp=sharing) |
+| Time in Ethereum | Caspar | Devcon 6 | 12 October 2022 | [Video](https://youtu.be/gsFU-inKRQ8) + [Slides](https://docs.google.com/presentation/d/1GhRjECiF7dEw0N1hAtVa7G5N0JFav2ZtiuTSYzyRouc/edit?usp=sharing) |
+| ELI5 Cryptoeconomics | Julian | Devcon 6 | 11 October 2022 | [Video](https://youtu.be/gMiykGwPDSI) + [Slides](https://docs.google.com/presentation/d/1ADPiTVWEVQ8nBGLMRdx5GmSFdrrKi3OzsbyedOcVLWk/edit) |
+| Updates on Proposer-Builder Separation | Barnabé | Devcon 6 | 11 October 2022 | [Video](https://youtu.be/sQQ2UYB3qOI) + [Slides](https://docs.google.com/presentation/d/13-hpqh61xojvG7cEQfPzBSIIBrZNyTwzJRRx7cc3Jvk/edit?usp=sharing) |
+| Making sense of rollup economics | Barnabé | EthCC[5] | 20 July 2022 | [Video](https://youtu.be/BmQnb7TN3Ho) + [Slides](https://docs.google.com/presentation/d/1ycfr9f0Ppcxf8LK9--C0ie9co7c0Pb2RaMdl4-vn9iY/edit?usp=sharing) |
 | Modelling blockchain protocols: Consensus and fee markets | Barnabé | [SMGT Erice](https://sites.google.com/view/erice-smgt2020/the-workshop?authuser=0) | 14 May 2022 | [Slides](https://docs.google.com/presentation/d/1JkwCeYNCF4fwK7W03TOGFq8thzrwdVIiFHbqzKI91CM/edit?usp=sharing) |
 | Let me in! Let me IIINNNN! A longitudinal study of the transaction supply chain from CryptoKitties to MEV-Boost to PBS | Barnabé | [mev.day](https://flashbots.notion.site/MEV-DAY-836f88806995412dabc1c7bb7ce4e830) @ Devconnect | 22 April 2022 | [Video](https://www.youtube.com/watch?t=9784&v=HYPGD2bOMOo) + [Slides](https://docs.google.com/presentation/d/1lkt_33zWTz9ZNU661ORJwYLO6wqijuPR6xZ9VUhGfLU/edit?usp=sharing) |
-| Notes on Ethereum’s circulating supply equilibrium and the prospect of perpetual deflation via minimum viable issuance under proof of stake | Anders | ETHconomics @ Devconnect | 21 April 2022 | Video (TBA) + Slides (TBA) |
-| ETHconomics | RIG team | ETHconomics @ Devconnect | 21 April 2022 | Videos (TBA) + [Schedule](https://ef-events.notion.site/ETHconomics-Devconnect-676d73f791684e18bfae35bbc9e1fa90) |
+| Notes on Ethereum’s circulating supply equilibrium and the prospect of perpetual deflation via minimum viable issuance under proof of stake | Anders | ETHconomics @ Devconnect | 21 April 2022 | [Video](https://youtu.be/LtEMabS0Oas) + Slides (TBA) |
+| ETHconomics | RIG team | ETHconomics @ Devconnect | 21 April 2022 | [Videos](https://www.youtube.com/playlist?list=PLTLjFJ0OQOj5PHRvA2snoOKt2udVsyXEm) + [Schedule](https://ef-events.notion.site/ETHconomics-Devconnect-676d73f791684e18bfae35bbc9e1fa90) |
 | Three Attacks on PoS Ethereum | Caspar | [Financial Cryptography 2022](https://fc22.ifca.ai/program.html) | 19 April 2022 | [Video](https://www.youtube.com/watch?v=IMOKeUJVWPs) + [Slides](https://drive.google.com/file/d/10-uWt7dtHK9rLQls3Iy6HwbQV-0wI8fu/view?usp=sharing) |
 | Proposer-Builder Separation (PBS) | Barnabé | Protocol R&D Workshop @ Devconnect | 19 April 2022 | [Slides](https://docs.google.com/presentation/d/10-rDd99he_7_lHq0wqIRlPb29z5Lx9ZpUl1PKQq8JRU/edit?usp=sharing) |
 | Robust incentives testing at the Robust Incentives Group | Barnabé | [Workshop on Incentive Mechanism Validation (WIMV)](https://sites.google.com/semiotic.ai/wimv2022) @ Devconnect | 18 April 2022 | [Video](https://youtu.be/bX2NAvQjaag) + [Slides](https://docs.google.com/presentation/d/1mWCuVQGrG5KS6GwG09D4q7MzHfeCIi54xdygJp8F3IM/edit?usp=sharing) |
