@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:news="http://www.google.com/schemas/sitemap-news/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml" xmlns:mobile="http://www.google.com/schemas/sitemap-mobile/1.0" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1" xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">
+<url><loc>https://crypto.ethereum.org</loc><changefreq>daily</changefreq><priority>0.7</priority><lastmod>2022-06-28T19:25:16.364Z</lastmod></url>
+<url><loc>https://crypto.ethereum.org/blog</loc><changefreq>daily</changefreq><priority>0.7</priority><lastmod>2022-06-28T19:25:16.364Z</lastmod></url>
+<url><loc>https://crypto.ethereum.org/bounties</loc><changefreq>daily</changefreq><priority>0.7</priority><lastmod>2022-06-28T19:25:16.364Z</lastmod></url>
+<url><loc>https://crypto.ethereum.org/bounties/legendre-prf</loc><changefreq>daily</changefreq><priority>0.7</priority><lastmod>2022-06-28T19:25:16.364Z</lastmod></url>
+<url><loc>https://crypto.ethereum.org/bounties/legendre-prf/algorithmic-bounties</loc><changefreq>daily</changefreq><priority>0.7</priority><lastmod>2022-06-28T19:25:16.364Z</lastmod></url>
+<url><loc>https://crypto.ethereum.org/bounties/legendre-prf/concrete-instance-bounties</loc><changefreq>daily</changefreq><priority>0.7</priority><lastmod>2022-06-28T19:25:16.364Z</lastmod></url>
+<url><loc>https://crypto.ethereum.org/bounties/legendre-prf/smart-contract-instructions</loc><changefreq>daily</changefreq><priority>0.7</priority><lastmod>2022-06-28T19:25:16.364Z</lastmod></url>
+<url><loc>https://crypto.ethereum.org/bounties/mimc-hash-challenge</loc><changefreq>daily</changefreq><priority>0.7</priority><lastmod>2022-06-28T19:25:16.364Z</lastmod></url>
+<url><loc>https://crypto.ethereum.org/bounties/rsa</loc><changefreq>daily</changefreq><priority>0.7</priority><lastmod>2022-06-28T19:25:16.364Z</lastmod></url>
+<url><loc>https://crypto.ethereum.org/bounties/rsa/assumptions</loc><changefreq>daily</changefreq><priority>0.7</priority><lastmod>2022-06-28T19:25:16.364Z</lastmod></url>
+<url><loc>https://crypto.ethereum.org/bounties/rsa/bounties</loc><changefreq>daily</changefreq><priority>0.7</priority><lastmod>2022-06-28T19:25:16.364Z</lastmod></url>
+<url><loc>https://crypto.ethereum.org/bounties/rsa/concrete-instance-bounties</loc><changefreq>daily</changefreq><priority>0.7</priority><lastmod>2022-06-28T19:25:16.364Z</lastmod></url>
+<url><loc>https://crypto.ethereum.org/bounties/zk-hash</loc><changefreq>daily</changefreq><priority>0.7</priority><lastmod>2022-06-28T19:25:16.364Z</lastmod></url>
+<url><loc>https://crypto.ethereum.org/events</loc><changefreq>daily</changefreq><priority>0.7</priority><lastmod>2022-06-28T19:25:16.364Z</lastmod></url>
+<url><loc>https://crypto.ethereum.org/research</loc><changefreq>daily</changefreq><priority>0.7</priority><lastmod>2022-06-28T19:25:16.364Z</lastmod></url>
+<url><loc>https://crypto.ethereum.org/team</loc><changefreq>daily</changefreq><priority>0.7</priority><lastmod>2022-06-28T19:25:16.364Z</lastmod></url>
+<url><loc>https://crypto.ethereum.org/blog/algorand-hash-analysis</loc><changefreq>daily</changefreq><priority>0.7</priority><lastmod>2022-06-28T19:25:16.364Z</lastmod></url>
+<url><loc>https://crypto.ethereum.org/blog/groth-sahai-blogpost</loc><changefreq>daily</changefreq><priority>0.7</priority><lastmod>2022-06-28T19:25:16.364Z</lastmod></url>
+</urlset>
