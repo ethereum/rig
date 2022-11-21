@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg version="1.1" width="224.00mm" height="79.00mm" viewBox="-2.00 -127.00 224.00 79.00" fill-rule="nonzero" stroke-miterlimit="10" style="font-family: &apos;Times New Roman&apos;; font-weight:normal" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!--Created by TpX drawing tool-->
+  <defs/>
+  <path stroke="black" stroke-width="0.30" fill="greenyellow" d="M 60.00,-112.00 C 60.00,-110.89 60.89,-110.00 62.00,-110.00 C 80.00,-110.00 80.00,-110.00 98.00,-110.00 C 99.11,-110.00 100.00,-110.89 100.00,-112.00 C 100.00,-117.50 100.00,-117.50 100.00,-123.00 C 100.00,-124.11 99.11,-125.00 98.00,-125.00 C 80.00,-125.00 80.00,-125.00 62.00,-125.00 C 60.89,-125.00 60.00,-124.11 60.00,-123.00 C 60.00,-117.50 60.00,-117.50 60.00,-112.00 Z"/>
+  <text x="80.00" y="-114.00" font-size="4.00" xml:space="preserve" text-anchor="middle" fill="black" font-family="Times New Roman, serif">Factoring</text>
+  <text x="80.00" y="-119.00" font-size="4.00" xml:space="preserve" text-anchor="middle" fill="black" font-family="Times New Roman, serif">Discrete Logarithm</text>
+  <path stroke="black" stroke-width="0.30" fill="palegreen" d="M 60.00,-92.00 C 60.00,-90.89 60.89,-90.00 62.00,-90.00 C 80.00,-90.00 80.00,-90.00 98.00,-90.00 C 99.11,-90.00 100.00,-90.89 100.00,-92.00 C 100.00,-95.00 100.00,-95.00 100.00,-98.00 C 100.00,-99.11 99.11,-100.00 98.00,-100.00 C 80.00,-100.00 80.00,-100.00 62.00,-100.00 C 60.89,-100.00 60.00,-99.11 60.00,-98.00 C 60.00,-95.00 60.00,-95.00 60.00,-92.00 Z"/>
+  <text x="80.00" y="-94.00" font-size="4.00" xml:space="preserve" text-anchor="middle" fill="black" font-family="Times New Roman, serif">RSA</text>
+  <path stroke="black" stroke-width="0.30" fill="mediumseagreen" d="M 60.00,-71.00 C 60.00,-69.89 60.89,-69.00 62.00,-69.00 C 80.00,-69.00 80.00,-69.00 98.00,-69.00 C 99.11,-69.00 100.00,-69.89 100.00,-71.00 C 100.00,-75.00 100.00,-75.00 100.00,-79.00 C 100.00,-80.11 99.11,-81.00 98.00,-81.00 C 80.00,-81.00 80.00,-81.00 62.00,-81.00 C 60.89,-81.00 60.00,-80.11 60.00,-79.00 C 60.00,-75.00 60.00,-75.00 60.00,-71.00 Z"/>
+  <text x="80.00" y="-76.00" font-size="4.00" xml:space="preserve" text-anchor="middle" fill="black" font-family="Times New Roman, serif">Strong RSA</text>
+  <polyline stroke="black" stroke-width="0.30" fill="none" points="80.00,-109.00 80.00,-100.00"/>
+  <polygon stroke="black" stroke-width="0.30" fill="black" points="80.00,-109.00 79.30,-106.20 80.70,-106.20 80.00,-109.00"/>
+  <polyline stroke="black" stroke-width="0.30" fill="none" points="80.00,-89.00 80.00,-82.00"/>
+  <polygon stroke="black" stroke-width="0.30" fill="black" points="80.00,-89.00 79.30,-86.20 80.70,-86.20 80.00,-89.00"/>
+  <path stroke="black" stroke-width="0.30" fill="mediumseagreen" d="M 120.00,-72.00 C 120.00,-70.89 120.89,-70.00 122.00,-70.00 C 140.00,-70.00 140.00,-70.00 158.00,-70.00 C 159.11,-70.00 160.00,-70.89 160.00,-72.00 C 160.00,-75.00 160.00,-75.00 160.00,-78.00 C 160.00,-79.11 159.11,-80.00 158.00,-80.00 C 140.00,-80.00 140.00,-80.00 122.00,-80.00 C 120.89,-80.00 120.00,-79.11 120.00,-78.00 C 120.00,-75.00 120.00,-75.00 120.00,-72.00 Z"/>
+  <text x="140.00" y="-74.00" font-size="4.00" xml:space="preserve" text-anchor="middle" fill="black" font-family="Times New Roman, serif">Pseudo-free</text>
+  <path stroke="black" stroke-width="0.30" fill="palegreen" d="M 180.00,-92.00 C 180.00,-90.89 180.89,-90.00 182.00,-90.00 C 200.00,-90.00 200.00,-90.00 218.00,-90.00 C 219.11,-90.00 220.00,-90.89 220.00,-92.00 C 220.00,-95.00 220.00,-95.00 220.00,-98.00 C 220.00,-99.11 219.11,-100.00 218.00,-100.00 C 200.00,-100.00 200.00,-100.00 182.00,-100.00 C 180.89,-100.00 180.00,-99.11 180.00,-98.00 C 180.00,-95.00 180.00,-95.00 180.00,-92.00 Z"/>
+  <text x="200.00" y="-94.00" font-size="4.00" xml:space="preserve" text-anchor="middle" fill="black" font-family="Times New Roman, serif">Order</text>
+  <polyline stroke="black" stroke-width="0.30" stroke-dasharray="2.0,1.0" fill="none" points="140.00,-90.00 140.00,-82.00"/>
+  <polygon stroke="black" stroke-width="0.30" fill="black" points="140.00,-90.00 139.30,-87.20 140.70,-87.20 140.00,-90.00"/>
+  <path stroke="black" stroke-width="0.30" fill="seagreen" d="M 0.00,-52.00 C 0.00,-50.89 0.89,-50.00 2.00,-50.00 C 20.00,-50.00 20.00,-50.00 38.00,-50.00 C 39.11,-50.00 40.00,-50.89 40.00,-52.00 C 40.00,-55.00 40.00,-55.00 40.00,-58.00 C 40.00,-59.11 39.11,-60.00 38.00,-60.00 C 20.00,-60.00 20.00,-60.00 2.00,-60.00 C 0.89,-60.00 0.00,-59.11 0.00,-58.00 C 0.00,-55.00 0.00,-55.00 0.00,-52.00 Z"/>
+  <text x="20.00" y="-54.00" font-size="4.00" xml:space="preserve" text-anchor="middle" fill="black" font-family="Times New Roman, serif">Adaptive Root</text>
+  <path stroke="black" stroke-width="0.30" fill="palegreen" d="M 120.00,-92.00 C 120.00,-90.89 120.89,-90.00 122.00,-90.00 C 140.00,-90.00 140.00,-90.00 158.00,-90.00 C 159.11,-90.00 160.00,-90.89 160.00,-92.00 C 160.00,-95.00 160.00,-95.00 160.00,-98.00 C 160.00,-99.11 159.11,-100.00 158.00,-100.00 C 140.00,-100.00 140.00,-100.00 122.00,-100.00 C 120.89,-100.00 120.00,-99.11 120.00,-98.00 C 120.00,-95.00 120.00,-95.00 120.00,-92.00 Z"/>
+  <text x="140.00" y="-94.00" font-size="4.00" xml:space="preserve" text-anchor="middle" fill="black" font-family="Times New Roman, serif">Diffie-Hellman</text>
+  <path stroke="black" stroke-width="0.30" fill="palegreen" d="M 15.00,-92.00 C 15.00,-90.89 15.89,-90.00 17.00,-90.00 C 35.00,-90.00 35.00,-90.00 53.00,-90.00 C 54.11,-90.00 55.00,-90.89 55.00,-92.00 C 55.00,-95.00 55.00,-95.00 55.00,-98.00 C 55.00,-99.11 54.11,-100.00 53.00,-100.00 C 35.00,-100.00 35.00,-100.00 17.00,-100.00 C 15.89,-100.00 15.00,-99.11 15.00,-98.00 C 15.00,-95.00 15.00,-95.00 15.00,-92.00 Z"/>
+  <text x="80.00" y="-71.00" font-size="4.00" xml:space="preserve" text-anchor="middle" fill="black" font-family="Times New Roman, serif">QR-Strong RSA</text>
+  <polyline stroke="black" stroke-width="0.30" fill="none" points="20.00,-69.00 20.00,-60.00"/>
+  <polygon stroke="black" stroke-width="0.30" fill="black" points="20.00,-69.00 19.30,-66.20 20.70,-66.20 20.00,-69.00"/>
+  <polyline stroke="black" stroke-width="0.30" fill="none" points="90.00,-109.00 139.00,-100.00"/>
+  <polygon stroke="black" stroke-width="0.30" fill="black" points="90.00,-109.00 92.63,-107.81 92.88,-109.18 90.00,-109.00"/>
+  <polyline stroke="black" stroke-width="0.30" fill="none" points="102.00,-77.00 120.00,-77.00"/>
+  <polygon stroke="black" stroke-width="0.30" fill="black" points="102.00,-77.00 104.80,-76.30 104.80,-77.70 102.00,-77.00"/>
+  <polyline stroke="black" stroke-width="0.30" fill="none" points="180.00,-90.00 161.00,-80.00"/>
+  <polygon stroke="black" stroke-width="0.30" fill="black" points="180.00,-90.00 177.20,-89.32 177.85,-88.08 180.00,-90.00"/>
+  <text x="130.00" y="-84.00" font-size="2.00" xml:space="preserve" text-anchor="middle" fill="black" font-family="Times New Roman, serif">for many bases</text>
+  <polyline stroke="black" stroke-width="0.30" fill="none" points="101.00,-111.00 181.00,-100.00"/>
+  <polygon stroke="black" stroke-width="0.30" fill="black" points="101.00,-111.00 103.68,-109.93 103.87,-111.31 101.00,-111.00"/>
+  <text x="35.00" y="-94.00" font-size="4.00" xml:space="preserve" text-anchor="middle" fill="black" font-family="Times New Roman, serif">Fractional Root</text>
+  <polyline stroke="black" stroke-width="0.30" fill="none" points="35.00,-90.00 35.00,-85.00"/>
+  <polygon stroke="black" stroke-width="0.30" fill="black" points="35.00,-90.00 34.30,-87.20 35.70,-87.20 35.00,-90.00"/>
+  <path stroke="black" stroke-width="0.30" fill="mediumseagreen" d="M 0.00,-72.00 C 0.00,-70.89 0.89,-70.00 2.00,-70.00 C 20.00,-70.00 20.00,-70.00 38.00,-70.00 C 39.11,-70.00 40.00,-70.89 40.00,-72.00 C 40.00,-75.00 40.00,-75.00 40.00,-78.00 C 40.00,-79.11 39.11,-80.00 38.00,-80.00 C 20.00,-80.00 20.00,-80.00 2.00,-80.00 C 0.89,-80.00 0.00,-79.11 0.00,-78.00 C 0.00,-75.00 0.00,-75.00 0.00,-72.00 Z"/>
+  <text x="20.00" y="-74.00" font-size="4.00" xml:space="preserve" text-anchor="middle" fill="black" font-family="Times New Roman, serif">Low order</text>
+  <polyline stroke="black" stroke-width="0.30" fill="none" points="35.00,-85.00 60.00,-80.00"/>
+  <polyline stroke="black" stroke-width="0.30" fill="none" points="35.00,-85.00 20.00,-80.00"/>
+  <polyline stroke="black" stroke-width="0.30" fill="none" points="69.00,-110.00 35.00,-100.00"/>
+  <polygon stroke="black" stroke-width="0.30" fill="black" points="69.00,-110.00 66.12,-109.88 66.51,-108.54 69.00,-110.00"/>
+</svg>

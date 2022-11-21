@@ -1,109 +1,151 @@
-The Robust Incentives Group is a research team of the Ethereum Foundation. We specialise in incentive analysis for protocols, using methods from game theory, mechanism design, empirical analysis and simulations. Since our foundation, we actively participated in research on EIP-1559 and Proof-of-Stake Ethereum. Find our releases, posts, and papers on this homepage!
+[![Netlify Status](https://api.netlify.com/api/v1/badges/5d7b96c5-01cc-4feb-867f-109a2e2c9277/deploy-status)](https://app.netlify.com/sites/cryptography-research/deploys)
 
-**We're hiring!** Find our job offer for a protocol economist [here](https://jobs.lever.co/ethereumfoundation/cd2382ec-abbd-493b-b942-b5e2a61a6c0a).
+<h1 align="center">
+  Ethereum Foundation Cryptography Research
+</h1>
 
-## RIG Open Questions (ROPs)
+The Ethereum Foundation leads research into cryptographic protocols that are useful within
+the greater Ethereum community and more generally. Cryptography is a key tool that enables
+greater functionality, security, efficiency, and auditability in decentralized settings.
+We are currently conducting research into verifiable delay functions, multiparty
+computation, vector commitments, and zero-knowledge proofs etc. We have a culture of open
+source and no patents are put on any work that we produce.
 
-We propose a set of Open Questions we're looking to collaborate on. Find more details on the [ROPs homepage](https://efdn.notion.site/ROPs-RIG-Open-Problems-c11382c213f949a4b89927ef4e962adf)!
+This repository holds the codebase to our website, [crypto.ethereum.org](crypto.ethereum.org)
 
-## Projects
+## Stack
 
-### Proof-of-Stake
+The main stack used in the project includes:
 
-Research on Ethereum Proof-of-Stake consensus
+- [Next.js](https://nextjs.org/).
+- [TypeScript](https://www.typescriptlang.org/).
+- [ChakraUI](https://chakra-ui.com/) as component library.
+- [KaTeX](https://katex.org/) to render LaTeX math syntax.
 
-- [Timing games in Proof-of-Stake](https://ethresear.ch/t/timing-games-in-proof-of-stake/13980?u=barnabe)
+## Local development
 
-#### Beacon Runner: Proof-of-Stake digital twin
+The project is bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app), with a custom scaffolding.
 
-Ongoing effort to produce an incentives-focused testing environment for the consensus layer.
+### Getting Started
 
-- [Beacon Runner homepage](https://ethereum.github.io/beaconrunner)
-- [Beacon Runner repo](https://github.com/ethereum/beaconrunner)
+First, run the development server:
 
-#### Data analysis
+```bash
+npm run dev
+# or
+yarn dev
+```
 
-Consensus layer and validator analytics.
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-- [Beacon chain data analysis library (in R)](https://github.com/ethereum/rig/blob/master/posdata/notebooks/lib.R)
-- [Beacon chain April 2021 incident](https://barnabe.substack.com/p/a-data-driven-view-of-the-beacon) + [Script (in R)](https://github.com/ethereum/rig/blob/master/posdata/script/20210424_plots.R)
-- [Exploring the first 1000 epochs](https://ethereum.github.io/rig/posdata/notebooks/mainnet_explore.html)
-- [Visualising the 7-block reorg on the Ethereum beacon chain](https://barnabe.substack.com/p/pos-ethereum-reorg?s=w)
+You can start editing the page by modifying `pages/index.tsx`. The page auto-updates as you edit the file.
 
-### Fee markets
+## Project Structure
 
-#### abm1559: Agent-based modelling of the fee market
+The following list describes the main elements of the project structure:
 
-Simulations and analysis of transaction fee markets, specifically EIP-1559.
+- `public`: contains static assets like fonts and images.
+- `src`: contains the source code.
+  - `components`: React components.
+    - components with state are directly located inside `/components`.
+    - `layout`: components used to contain and apply different layouts to different pages.
+    - `UI`: stateless (functional) components.
+  - `pages`: includes components that renders to pages and [NextJS API Routes](https://nextjs.org/docs/api-routes/introduction).
+  - `posts`: markdown blog posts.
+  - `styles`: css stylesheets.
+    - `global.css`: global stylesheet.
+  - `theme`: contains the [Chakra UI custom theme](https://chakra-ui.com/docs/styled-system/theming/customize-theme), organized in `foundations` and `components` for better scaling.
+  - `utils`: utilitary stuff.
+  - `constants.ts`: this is the _global_ constants file, containg URLs and lists of elements we use across the site.
+  - `types.ts`: contains the custom defined TypeScript types and interfaces.
 
-- [abm1559 website](https://ethereum.github.io/abm1559)
-- [abm1559 repo](https://github.com/ethereum/abm1559)
+## Markdown & LaTex support on blog posts
 
-#### Data analysis
+### Markdown
 
-- A dashboard for EIP-1559 ([Dune](https://dune.xyz/barnabe/EIP1559))
-- [Gas weather report, July 21st-July 27th](https://ethereum.github.io/rig/ethdata/notebooks/gas_weather_reports/exploreJuly21.html) + [source](https://github.com/ethereum/rig/blob/master/ethdata/notebooks/gas_weather_reports/exploreJuly21.Rmd)
-- [Exploring blocks, gas and transactions](https://ethereum.github.io/rig/ethdata/notebooks/explore_data.html) + [source](https://github.com/ethereum/rig/blob/master/ethdata/notebooks/explore_data.Rmd)
+Support for [GitHub Flavored Markdown](https://github.github.com/gfm/), which is a superset of CommonMark and adds supports to other features like tables.
 
-#### Financial products for blockspace
+### LaTeX
 
-- [Structuring Blockspace Derivatives](https://mirror.xyz/0x03c29504CEcCa30B93FF5774183a1358D41fbeB1/WKa3GFC03uY34d2MufTyD0c595xVRUEZi9RNG-dHNKs)
-- [Next-Block Base Fee Options: Towards a Practical Implementation](https://mirror.xyz/0x03c29504CEcCa30B93FF5774183a1358D41fbeB1/dKgbn5YA3S5AL_qbUWq4HHZAjQSJGZf8oEPZ5Q89aFc)
+The site uses [KaTeX](https://katex.org) to render LaTeX/math and inside `/research` publications abstracts. LaTeX-rendering libs are not 100% compatible with LaTex yet, so please check the [support table](https://katex.org/docs/support_table.html) if you are having issues with some expression.
 
-#### Other publications
+## How to add a new blog post
 
-- [Congestion control and EIP-1559](https://barnabe.substack.com/p/congestion-control-and-eip1559)
-- [Understanding fees in EIP-1559](https://barnabe.substack.com/p/understanding-fees-in-eip1559)
-- [Better bidding with EIP-1559](https://barnabe.substack.com/p/better-bidding-with-eip1559)
+The site supports both _internal_ and _external_ blog posts.
 
-### Rollups
+- **Internal posts**: to add a new one, just create a new markdown (`.md`) file under `src/posts` (make sure first this directory exists, otherwise create it first, under `/src`). The name of the file should follow the [kebab case](https://www.theserverside.com/definition/Kebab-case) convention, as it will be used to generate the url to the post. You also have to add some [Front Matter](https://frontmatter.codes/docs/markdown) metadata, like the post `title`, `author(s)` and `date`, which are required.
 
-- [The road to Ethereum: Visualising a rollup-centric future](https://barnabe.substack.com/p/eth2?s=w)
-- [Understanding rollup economics from first principles](https://barnabe.substack.com/p/understanding-rollup-economics-from?utm_source=url) + [Dashboard](https://dune.com/barnabe/Rollup-statistics)
+Metadata example:
 
-### Proposer-Builder Separation (PBS)
+```
+---
+title: 'VDF Proving with SnarkPack'
+description 'Some awesome description for social media snippets, under 160 characters'
+author: 'Mary Maller'
+date: '2022-03-16'
+---
+```
 
-- [Unbundling PBS: Towards protocol-enforced proposer commitments (PEPC)](https://ethresear.ch/t/unbundling-pbs-towards-protocol-enforced-proposer-commitments-pepc/13879?u=barnabe)
+Post titles should be under 60 characters. [Learn more on title tags](https://moz.com/learn/seo/title-tag).
 
-## Publications
+Post descriptions should be under 160 characters. [Learn more on meta descriptions](https://moz.com/learn/seo/meta-description).
 
-- Schwarz-Schilling, C., Neu, J., Monnot, B., Asgaonkar, A., Tas, E. N., & Tse, D. (2021). Three Attacks on Proof-of-Stake Ethereum. _arXiv preprint arXiv:2110.10086_. [arXiv link](https://arxiv.org/abs/2110.10086)
+- **External posts**: you can also link to an external post from the `/blog` page by appending an object with the required data (`title`, `date`, `link`) to the `externalLinks` list from the `src/pages/blog/index.tsx` file. See the example below:
 
-- Reijsbergen, D., Sridhar, S., Monnot, B., Leonardos, S., Skoulakis, S., & Piliouras, G. (2021). Transaction Fees on a Honeymoon: Ethereum's EIP-1559 One Month Later. _arXiv preprint arXiv:2110.04753_. [arXiv link](https://arxiv.org/abs/2110.04753)
+```
+const externalLinks = [
+  {
+    title: 'Ethereum Merge: Run the majority client at your own peril!',
+    date: '2022-03-24',
+    link: 'https://dankradfeist.de/ethereum/2022/03/24/run-the-majority-client-at-your-own-peril.html'
+  }
+];
+```
 
-- Leonardos, S., Monnot, B., Reijsbergen, D., Skoulakis, S., & Piliouras, G. (2021). Dynamical Analysis of the EIP-1559 Ethereum Fee Market. _arXiv preprint arXiv:2102.10567_. [arXiv link](https://arxiv.org/abs/2102.10567)
+### How to add images to a local post
 
-## Talks
+Image files should be placed inside `/public/images/` and the path to the image will be referenced as `/images/${filename}`. For example, we can insert the EF logo in a post by using
 
-Meet the RIG and check our previous talks!
+```
+![EF logo](/images/ef-logo-bg-white.png "EF logo")
+```
 
-| Talk | Speaker | Location | Date | Link |
-|---|---|---|---|---|
-| Time in Ethereum | Caspar | Devcon 6 | 12 October 2022 | [Video](https://youtu.be/gsFU-inKRQ8) + [Slides](https://docs.google.com/presentation/d/1GhRjECiF7dEw0N1hAtVa7G5N0JFav2ZtiuTSYzyRouc/edit?usp=sharing) |
-| ELI5 Cryptoeconomics | Julian | Devcon 6 | 11 October 2022 | [Video](https://youtu.be/gMiykGwPDSI) + [Slides](https://docs.google.com/presentation/d/1ADPiTVWEVQ8nBGLMRdx5GmSFdrrKi3OzsbyedOcVLWk/edit) |
-| Updates on Proposer-Builder Separation | Barnabé | Devcon 6 | 11 October 2022 | [Video](https://youtu.be/sQQ2UYB3qOI) + [Slides](https://docs.google.com/presentation/d/13-hpqh61xojvG7cEQfPzBSIIBrZNyTwzJRRx7cc3Jvk/edit?usp=sharing) |
-| Making sense of rollup economics | Barnabé | EthCC[5] | 20 July 2022 | [Video](https://youtu.be/BmQnb7TN3Ho) + [Slides](https://docs.google.com/presentation/d/1ycfr9f0Ppcxf8LK9--C0ie9co7c0Pb2RaMdl4-vn9iY/edit?usp=sharing) |
-| Modelling blockchain protocols: Consensus and fee markets | Barnabé | [SMGT Erice](https://sites.google.com/view/erice-smgt2020/the-workshop?authuser=0) | 14 May 2022 | [Slides](https://docs.google.com/presentation/d/1JkwCeYNCF4fwK7W03TOGFq8thzrwdVIiFHbqzKI91CM/edit?usp=sharing) |
-| Let me in! Let me IIINNNN! A longitudinal study of the transaction supply chain from CryptoKitties to MEV-Boost to PBS | Barnabé | [mev.day](https://flashbots.notion.site/MEV-DAY-836f88806995412dabc1c7bb7ce4e830) @ Devconnect | 22 April 2022 | [Video](https://www.youtube.com/watch?t=9784&v=HYPGD2bOMOo) + [Slides](https://docs.google.com/presentation/d/1lkt_33zWTz9ZNU661ORJwYLO6wqijuPR6xZ9VUhGfLU/edit?usp=sharing) |
-| Notes on Ethereum’s circulating supply equilibrium and the prospect of perpetual deflation via minimum viable issuance under proof of stake | Anders | ETHconomics @ Devconnect | 21 April 2022 | [Video](https://youtu.be/LtEMabS0Oas) + Slides (TBA) |
-| ETHconomics | RIG team | ETHconomics @ Devconnect | 21 April 2022 | [Videos](https://www.youtube.com/playlist?list=PLTLjFJ0OQOj5PHRvA2snoOKt2udVsyXEm) + [Schedule](https://ef-events.notion.site/ETHconomics-Devconnect-676d73f791684e18bfae35bbc9e1fa90) |
-| Three Attacks on PoS Ethereum | Caspar | [Financial Cryptography 2022](https://fc22.ifca.ai/program.html) | 19 April 2022 | [Video](https://www.youtube.com/watch?v=IMOKeUJVWPs) + [Slides](https://drive.google.com/file/d/10-uWt7dtHK9rLQls3Iy6HwbQV-0wI8fu/view?usp=sharing) |
-| Proposer-Builder Separation (PBS) | Barnabé | Protocol R&D Workshop @ Devconnect | 19 April 2022 | [Slides](https://docs.google.com/presentation/d/10-rDd99he_7_lHq0wqIRlPb29z5Lx9ZpUl1PKQq8JRU/edit?usp=sharing) |
-| Robust incentives testing at the Robust Incentives Group | Barnabé | [Workshop on Incentive Mechanism Validation (WIMV)](https://sites.google.com/semiotic.ai/wimv2022) @ Devconnect | 18 April 2022 | [Video](https://youtu.be/bX2NAvQjaag) + [Slides](https://docs.google.com/presentation/d/1mWCuVQGrG5KS6GwG09D4q7MzHfeCIi54xdygJp8F3IM/edit?usp=sharing) |
-| The road to Ethereum (2022 version) | Barnabé | SUTD Guest Lecture | 11 April 2022 | [Slides](https://docs.google.com/presentation/d/1mNi7mjBH4OOPOLw945Vow4q2-tHPVKh9P_wG518fMD0/edit?usp=sharing) |
-| Protocol Cryptoeconomics | Barnabé | NTU Blockchain workshop | 20 December 2021 | [Slides](https://docs.google.com/presentation/d/1IamBsYVa40qLrGu6QIhpumMb81AgRawe_ZblHrig9xY/edit?usp=sharing) |
-| Economics of EIP-1559 | Barnabé | Berlin Ethereum Meetup | 4 November 2021 | [Slides](https://docs.google.com/presentation/d/1DG95jsDsjwoK4mNnSxQHbXaupeIkcSj4bX-55DxPMwE/edit?usp=sharing) |
-| The Game of Reorgs in PoS Ethereum | Caspar | LisCon 2021 | 20 October 2021 | [Video](https://vimeo.com/637529564) + [Slides](https://drive.google.com/file/d/1nNOx3p8ZSIbY6M9UDntbGZbFEJ0fOKE-/view?usp=sharing) |
-| Employing a reinforcement learning-based framework to analyze incentive mechanism attacks on Ethereum blockchain | Shyam | EDCON 2021 | 28 August 2021 | [Video](https://youtu.be/mwxK7tEtcIM) |
-| Post-London EIP-1559 Assessment | Barnabé | EIP-1559 breakout call #12 | 13 August 2021 | [Video](https://youtu.be/ZmzIHFuwdg0?t=239) |
-| Protocol cryptoeconomics with the RIG | Barnabé | EthCC[4] | 20 July 2021 | [Video](https://www.youtube.com/watch?v=6FIIZW7ScuE) + [Slides](assets/pdf/ethcc2021.pdf) |
-| Ethereum : Un protocole en mutation | Barnabé | EthCC[4] | 20 July 2021 | |
-| PEEPanEIP #37: EIP-1559: Fee market change with Tim Beiko, Barnabé Monnot, Micah Zoltu | Barnabé | Ethereum Cat Herders | 21 June 2021 | [Video](https://www.youtube.com/watch?v=AC1FS3LmoT4) + [Slides](https://docs.google.com/presentation/d/1vVGaezpoj-sYPPBNSY0LdPyJGIex2zl1cdgipVoMkL0/edit?usp=sharing) |
-| The road to Ethereum | Barnabé | Online (SUTD) | 9 April 2021 | [Blog post](https://barnabe.substack.com/p/eth2) |
-| En route pour eip1559 | Barnabé | Online (Ethereum France, in French) | 10 November 2020 | [Video](https://www.youtube.com/watch?v=p8M5RpiUG8o) + [Slides](https://docs.google.com/presentation/u/1/d/1MuO7egGTleSXrYcQH9B6IZ-NrMNyTPmypLb4MN9d9SE/edit?usp=sharing) |
-| Strategic issues in EIP 1559 | Barnabé | Online (ETHTaipei) | 15 October 2020 | [Video](https://www.youtube.com/watch?v=3pErNDU5BiE) + [Slides](https://docs.google.com/presentation/d/1AHQAgLqAIsiF_Vd2pcYaMBvg0v8d-01_yzsWJLOLj4I/edit) |
-| Ethereum's new transaction fee market design, EIP 1559 | Barnabé | Online (SUTD) | 25 September 2020 | [Notes/slides](assets/pdf/notes-georgios.pdf) |
-| cadCAD community call #2 | Barnabé | Online | 28 August 2020 | [Video](https://www.youtube.com/watch?v=SVNNvTiIKlg) + [Slides](https://docs.google.com/presentation/d/13PHT4fIw7g_fhOfkagZRyxjeVO8dM3z6zjRMQkY0j1U/edit?usp=sharing) |
-| Eth Magicians EIP 1559 panel | Barnabé | Online | 29 July 2020 | [Video](https://www.youtube.com/watch?v=kNSpugOwQ1o) |
-| RIG Bouillabaisse | Barnabé | EthCC[3] | 3 March 2020 | [Slides](assets/pdf/rig-ethcc.pdf) |
-| OpenSUTD Blockchain development IAP | Barnabé | SUTD | 16 January 2020 | [Slides](https://docs.google.com/presentation/d/10LR57HTiSs-8pBpNeXKoJ13zOPxzOrLI8Avs3FSDsz0/edit?usp=sharing) |
+Take into account that images are automatically centered, no need to add extra HTML.
+
+### How to add footnotes to a local post
+
+Follow [this syntax](https://github.blog/changelog/2021-09-30-footnotes-now-supported-in-markdown-fields/).
+
+## How to deploy changes succesfully
+
+- **Locally**: **Make sure the site builds** locally, otherwise the build will break and the new version of the site (e.g.: adding a new post) will not be generated. To be sure of this, run the `yarn build` command locally and check that you get no errors.
+- **On GitHub**: check that the `Deploy Preview` passes succesfully.
+
+## Bounties pages
+
+The source files (`.md`) for the bounties pages are located at `/src/bounties-data-source`. If you need to update the content from a certain bounty, just modify the corresponding file. LaTeX/math is also supported here.
+
+For a better organization, images used in bounties pages are placed inside `/public/images/bounties/` and the path to the image have to be referenced as `/images/bounties/${filename}` (check `/src/bounties-data-source/rsa/assumptions.md` as example).
+
+### Notes
+
+- Dates should follow the `yyyy-mm-dd` format (for both internal and external posts), like `date: '2022-03-16'`
+- Blog posts are sorted automatically by date, regardless the order of insertion.
+- Check the current sample posts on `src/posts`.
+
+## Tutorials
+
+### Learning NextJS
+
+To learn more about Next.js, take a look at the following resources:
+
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+
+### Adding ChakraUI to a NextJS project
+
+[This](https://chakra-ui.com/guides/getting-started/nextjs-guide) is a very clear and step-by-step guide on it.
+
+### Learning ChakraUI
+
+We recommend checking the [official docs](https://chakra-ui.com/docs/getting-started).

@@ -1,0 +1,44 @@
+{
+  "name": "cryptography-research-website",
+  "private": false,
+  "description": "Ethereum Foundation's Cryptography Research Website",
+  "version": "1.0.0",
+  "author": "Nicolás Quiroz <nicolas.quiroz@ethereum.org>",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "postbuild": "next-sitemap",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@chakra-ui/icons": "^1.1.7",
+    "@chakra-ui/react": "^1.8.6",
+    "@emotion/react": "^11",
+    "@emotion/styled": "^11",
+    "@fontsource/libre-franklin": "^4.5.5",
+    "chakra-ui-markdown-renderer": "^4.0.0",
+    "focus-visible": "^5.2.0",
+    "framer-motion": "^6",
+    "gray-matter": "^4.0.3",
+    "next": "12.1.0",
+    "react": "17.0.2",
+    "react-dom": "17.0.2",
+    "react-katex": "^2.0.2",
+    "react-markdown": "^8.0.1",
+    "rehype-katex": "^6.0.2",
+    "rehype-raw": "^6.1.1",
+    "remark-gfm": "^3.0.1",
+    "remark-math": "^5.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "17.0.21",
+    "@types/react": "17.0.41",
+    "eslint": "8.11.0",
+    "eslint-config-next": "12.1.0",
+    "eslint-config-prettier": "^8.5.0",
+    "next-sitemap": "^2.5.19",
+    "prettier": "^2.6.0",
+    "typescript": "4.6.2"
+  }
+}
