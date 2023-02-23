@@ -1,7 +1,5 @@
 The Robust Incentives Group is a research team of the Ethereum Foundation. We specialise in incentive analysis for protocols, using methods from game theory, mechanism design, empirical analysis and simulations. Since our foundation, we actively participated in research on EIP-1559 and Proof-of-Stake Ethereum. Find our releases, posts, and papers on this homepage!
 
-**We're hiring!** Find our job offer for a protocol economist [here](https://jobs.lever.co/ethereumfoundation/cd2382ec-abbd-493b-b942-b5e2a61a6c0a).
-
 ## RIG Open Questions (ROPs)
 
 We propose a set of Open Questions we're looking to collaborate on. Find more details on the [ROPs homepage](https://efdn.notion.site/ROPs-RIG-Open-Problems-c11382c213f949a4b89927ef4e962adf)!
